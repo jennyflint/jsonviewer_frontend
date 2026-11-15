@@ -1,0 +1,16 @@
+{
+  "users": [
+    {"id": 1, "name": "Ann", "role": "admin", "tags": ["a", "b"]},
+    {"id": 2, "name": "Bob", "role": "user", "tags": ["a", "b"]},
+    {"id": 2, "name": "Cid", "role": "user", "tags": ["c"]},
+    {"id": 3, "role": "user"}
+  ],
+  "flag": true,
+  "other": true,
+  "nothing": null,
+  "n1": null,
+  "x": 1.0,
+  "y": 1,
+  "dup": 1,
+  "dup": 2
+}

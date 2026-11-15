@@ -1,0 +1,16 @@
+services:
+  web:
+    build: .
+    ports:
+      - '3000:8080'
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:8080/healthz']
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    networks: [jsonviewer-net]
+
+networks:
+  jsonviewer-net:
+    external: true

@@ -1,0 +1,81 @@
+{
+  "valid": true,
+  "parse_error": null,
+  "duplicate_keys": [
+    {
+      "object_path": "$",
+      "key": "dup",
+      "occurrences": [
+        {
+          "line": 14,
+          "column": 3,
+          "offset": 334,
+          "value_preview": "1"
+        },
+        {
+          "line": 15,
+          "column": 3,
+          "offset": 346,
+          "value_preview": "2"
+        }
+      ]
+    }
+  ],
+  "duplicate_values": [
+    {
+      "type": "string",
+      "value": "user",
+      "count": 3,
+      "paths": ["$.users[1].role", "$.users[2].role", "$.users[3].role"]
+    },
+    {
+      "type": "number",
+      "value": 1,
+      "count": 3,
+      "paths": ["$.users[0].id", "$.x", "$.y"],
+      "lexemes": ["1", "1.0"]
+    },
+    {
+      "type": "number",
+      "value": 2,
+      "count": 3,
+      "paths": ["$.users[1].id", "$.users[2].id", "$.dup"],
+      "lexemes": ["2"]
+    },
+    {
+      "type": "string",
+      "value": "a",
+      "count": 2,
+      "paths": ["$.users[0].tags[0]", "$.users[1].tags[0]"]
+    },
+    {
+      "type": "string",
+      "value": "b",
+      "count": 2,
+      "paths": ["$.users[0].tags[1]", "$.users[1].tags[1]"]
+    },
+    {
+      "type": "boolean",
+      "value": true,
+      "count": 2,
+      "paths": ["$.flag", "$.other"]
+    },
+    {
+      "type": "null",
+      "value": null,
+      "count": 2,
+      "paths": ["$.nothing", "$.n1"]
+    }
+  ],
+  "duplicate_subtrees": [
+    {
+      "kind": "array",
+      "size": 3,
+      "count": 2,
+      "preview": "[\"a\",\"b\"]",
+      "paths": ["$.users[0].tags", "$.users[1].tags"]
+    }
+  ],
+  "duplicates_by_field": null,
+  "truncated": false
+}

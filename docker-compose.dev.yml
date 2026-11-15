@@ -1,0 +1,20 @@
+services:
+  web:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile && pnpm dev --host"
+    ports: !override
+      - '5173:5173'
+    environment:
+      - VITE_API_PROXY_TARGET=http://api:8000
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    restart: 'no'
+    healthcheck:
+      disable: true
+    build: !reset null
+    networks: [jsonviewer-net]
+
+volumes:
+  node_modules:
