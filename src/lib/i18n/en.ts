@@ -40,6 +40,12 @@ export const en = {
 
   'auth.sign_in': 'Sign in',
   'auth.sign_in_with': 'Sign in with {provider}',
+  'auth.benefits_title': 'Sign in to get:',
+  'auth.benefit_history': 'A personal history of your documents, available on any device',
+  'auth.benefit_autosave': 'Automatic saving after Format, Load from URL, Share and Compare',
+  'auth.benefit_never': 'Share links that never expire',
+  'auth.benefit_shares': 'Manage and delete your shares and active sessions',
+  'auth.benefits_optional': 'Optional — everything else works without signing in.',
   'auth.sign_out': 'Sign out',
   'auth.signed_out': 'Signed out',
   'auth.user_menu': 'User menu',

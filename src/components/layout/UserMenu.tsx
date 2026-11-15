@@ -2,12 +2,42 @@ import { A, useNavigate } from '@solidjs/router';
 import { Show } from 'solid-js';
 import { History, LogIn, LogOut, User as UserIcon } from 'lucide-solid';
 import { Menu } from '../ui/Menu';
+import { Tooltip } from '../ui/Tooltip';
+import { For } from 'solid-js';
 import { auth, login, logout } from '../../stores/auth';
 import { t } from '../../lib/i18n';
 import { Toggle } from '../ui/Toggle';
 import { settings, updateSettings } from '../../stores/settings';
 
 export const providerLabel = (p: string) => (p === 'google' ? 'Google' : p === 'github' ? 'GitHub' : p);
+
+const BENEFITS = [
+  'auth.benefit_history',
+  'auth.benefit_autosave',
+  'auth.benefit_never',
+  'auth.benefit_shares',
+] as const;
+
+function Benefits() {
+  return (
+    <div>
+      <div class="mb-1.5 font-semibold">{t('auth.benefits_title')}</div>
+      <ul class="space-y-1">
+        <For each={BENEFITS}>
+          {(k) => (
+            <li class="flex gap-2">
+              <span class="text-ok" aria-hidden="true">
+                ✓
+              </span>
+              <span>{t(k)}</span>
+            </li>
+          )}
+        </For>
+      </ul>
+      <div class="mt-2 text-xs text-muted">{t('auth.benefits_optional')}</div>
+    </div>
+  );
+}
 
 export function UserMenu() {
   const navigate = useNavigate();
@@ -18,27 +48,32 @@ export function UserMenu() {
         <Show
           when={auth.providers.length > 0}
           fallback={
-            <A
-              href="/login"
-              class="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-sm hover:bg-surface-2"
-            >
-              <LogIn size={14} /> {t('auth.sign_in')}
-            </A>
+            <Tooltip content={<Benefits />}>
+              <A
+                href="/login"
+                class="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-sm hover:bg-surface-2"
+              >
+                <LogIn size={14} /> {t('auth.sign_in')}
+              </A>
+            </Tooltip>
           }
         >
-          <Menu
-            label={t('auth.sign_in')}
-            trigger={
-              <span class="inline-flex items-center gap-1.5">
-                <LogIn size={14} /> {t('auth.sign_in')}
-              </span>
-            }
-            triggerClass="inline-flex h-9 items-center gap-1.5 rounded-md bg-accent px-3 text-sm font-medium text-accent-fg hover:opacity-90"
-            items={auth.providers.map((p) => ({
-              label: t('auth.sign_in_with', { provider: providerLabel(p) }),
-              onSelect: () => login(p),
-            }))}
-          />
+          <Tooltip content={<Benefits />}>
+            <Menu
+              noTitle
+              label={t('auth.sign_in')}
+              trigger={
+                <span class="inline-flex items-center gap-1.5">
+                  <LogIn size={14} /> {t('auth.sign_in')}
+                </span>
+              }
+              triggerClass="inline-flex h-9 items-center gap-1.5 rounded-md bg-accent px-3 text-sm font-medium text-accent-fg hover:opacity-90"
+              items={auth.providers.map((p) => ({
+                label: t('auth.sign_in_with', { provider: providerLabel(p) }),
+                onSelect: () => login(p),
+              }))}
+            />
+          </Tooltip>
         </Show>
       }
     >

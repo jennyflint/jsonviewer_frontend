@@ -156,3 +156,29 @@ test('expired session (401) clears the user and shows a toast', async ({ page })
   await expect(page.getByRole('button', { name: 'User menu' })).toHaveCount(0);
   void state;
 });
+
+test('Sign in button shows a tooltip with the benefits on hover and focus', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/');
+  const btn = page.getByRole('button', { name: 'Sign in' });
+  const tip = page.getByRole('tooltip');
+  await expect(tip).toBeHidden();
+  await btn.hover();
+  await expect(tip).toBeVisible();
+  await expect(tip).toContainText('Sign in to get:');
+  await expect(tip).toContainText('personal history');
+  await expect(tip).toContainText('never expire');
+  await page.mouse.move(400, 400);
+  await expect(tip).toBeHidden();
+  await btn.focus();
+  await expect(tip).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(tip).toBeHidden();
+});
+
+test('no sign-in tooltip for signed-in users', async ({ page }) => {
+  await mockApi(page, { user: USER });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'User menu' })).toBeVisible();
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+});

@@ -361,6 +361,22 @@ mark.hit.active {
   outline-offset: -2px;
 }
 
+/* matching brackets */
+.cm-editor .cm-matchingBracket,
+.cm-editor.cm-focused .cm-matchingBracket {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  outline: 1px solid var(--accent);
+  border-radius: 2px;
+  color: var(--text) !important;
+  font-weight: 700;
+}
+.cm-editor .cm-nonmatchingBracket,
+.cm-editor.cm-focused .cm-nonmatchingBracket {
+  background: var(--danger-soft);
+  outline: 1px solid var(--danger);
+  border-radius: 2px;
+}
+
 /* indent guides */
 .cm-indent-guide {
   background-image: linear-gradient(

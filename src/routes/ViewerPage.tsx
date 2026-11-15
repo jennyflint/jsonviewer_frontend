@@ -206,6 +206,14 @@ export default function ViewerPage() {
 
   const actions = (): ToolbarAction[] => [
     {
+      id: 'clear',
+      label: t('toolbar.clear'),
+      icon: <Eraser size={14} />,
+      onClick: () => void clear(),
+      disabled: !hasText(),
+      primary: true,
+    },
+    {
       id: 'paste',
       label: t('toolbar.paste'),
       icon: <ClipboardPaste size={14} />,
@@ -242,13 +250,6 @@ export default function ViewerPage() {
       label: t('toolbar.sort'),
       icon: <SortAsc size={14} />,
       onClick: () => void onTransform('sort'),
-      disabled: !hasText(),
-    },
-    {
-      id: 'clear',
-      label: t('toolbar.clear'),
-      icon: <Eraser size={14} />,
-      onClick: () => void clear(),
       disabled: !hasText(),
     },
     {

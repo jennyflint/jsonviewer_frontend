@@ -17,6 +17,8 @@ export interface MenuProps {
   trigger: JSX.Element;
   items: MenuEntry[];
   triggerClass?: string;
+  /** Skip the native `title` (when a richer tooltip is shown instead). */
+  noTitle?: boolean;
   placement?: 'bottom-start' | 'bottom-end';
 }
 
@@ -25,7 +27,7 @@ export function Menu(props: MenuProps) {
     <DropdownMenu placement={props.placement ?? 'bottom-end'} gutter={4}>
       <DropdownMenu.Trigger
         aria-label={props.label}
-        title={props.label}
+        title={props.noTitle ? undefined : props.label}
         class={
           props.triggerClass ??
           'inline-flex h-9 items-center gap-1 rounded-md px-2 text-fg hover:bg-surface-2'

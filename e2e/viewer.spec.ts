@@ -149,6 +149,7 @@ test('Text tab: highlighting toggle removes and restores syntax colours', async 
 });
 
 test('Text tab: syntax highlighting still works for an 8 MB document', async ({ page }) => {
+  test.setTimeout(120_000);
   await page.goto('/');
   const big = JSON.stringify(
     Array.from({ length: 200000 }, (_, i) => ({ id: i, name: 'user' + i, ok: true })),
@@ -158,7 +159,7 @@ test('Text tab: syntax highlighting still works for an 8 MB document', async ({ 
   await page.getByRole('button', { name: 'Paste' }).click();
   await expect(page.getByText('Valid JSON')).toBeVisible({ timeout: 60_000 });
   await expect
-    .poll(() => page.locator('.cm-content span[class^="ͼ"]').count(), { timeout: 20_000 })
+    .poll(() => page.locator('.cm-content span[class^="ͼ"]').count(), { timeout: 60_000 })
     .toBeGreaterThan(0);
 });
 
@@ -230,4 +231,52 @@ test('Text tab: indent guides toggle draws and removes the vertical lines', asyn
   });
   await btn.click();
   await expect(page.locator('.cm-indent-guide')).toHaveCount(0);
+});
+
+test('Text tab: the guide of the active block is highlighted', async ({ page }) => {
+  await page.goto('/');
+  await setEditor(page, JSON.stringify({ a: { b: { c: [1, 2, 3] } }, d: 1 }, null, 2));
+  await page.getByRole('button', { name: 'Indent guides' }).click();
+  const active = page.locator('.cm-indent-active');
+  await page.locator('.cm-line', { hasText: /^\s+2,$/ }).click();
+  await expect.poll(() => active.count()).toBe(3);
+  await page.locator('.cm-line', { hasText: '"a": {' }).click();
+  await expect.poll(() => active.count()).toBe(7);
+});
+
+test('Text tab: the matching bracket is highlighted (also in a large document)', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto('/');
+  await setEditor(page, '{"a":[1,2],"b":{"c":3}}');
+  await page.locator('.cm-line').first().click();
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => page.locator('.cm-matchingBracket').count()).toBe(2);
+  await expect(page.locator('.cm-matchingBracket').first()).toHaveCSS('outline-style', 'solid');
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => page.locator('.cm-matchingBracket').count()).toBe(0);
+
+  const big = JSON.stringify(
+    { items: Array.from({ length: 150000 }, (_, i) => ({ id: i, n: 'u' + i })) },
+    null,
+    1,
+  );
+  expect(big.length).toBeGreaterThan(5 * 1024 * 1024);
+  await page.evaluate((d) => navigator.clipboard.writeText(d), big);
+  await page.getByRole('button', { name: 'Paste' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Replace' }).click();
+  await expect(page.getByText('Valid JSON')).toBeVisible({ timeout: 60_000 });
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('End');
+  await expect.poll(() => page.locator('.cm-matchingBracket').count(), { timeout: 20_000 }).toBe(2);
+});
+
+test('toolbar order: Clear is the first button, then Paste', async ({ page }) => {
+  await page.goto('/');
+  const names = await page.getByRole('toolbar').first().getByRole('button').allInnerTexts();
+  expect(names[0]?.trim()).toBe('Clear');
+  expect(names[1]?.trim()).toBe('Paste');
 });

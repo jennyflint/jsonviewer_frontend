@@ -42,6 +42,13 @@ export const uk: Dict = {
 
   'auth.sign_in': 'Увійти',
   'auth.sign_in_with': 'Увійти через {provider}',
+  'auth.benefits_title': 'Увійшовши, ви отримаєте:',
+  'auth.benefit_history': 'Особисту історію документів, доступну на будь-якому пристрої',
+  'auth.benefit_autosave':
+    'Автоматичне збереження після форматування, завантаження за URL, шерінгу та порівняння',
+  'auth.benefit_never': 'Посилання для шерінгу без терміну дії',
+  'auth.benefit_shares': 'Керування своїми посиланнями та активними сесіями',
+  'auth.benefits_optional': 'Це необов’язково — усе інше працює без входу.',
   'auth.sign_out': 'Вийти',
   'auth.signed_out': 'Ви вийшли',
   'auth.user_menu': 'Меню користувача',
