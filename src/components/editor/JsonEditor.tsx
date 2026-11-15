@@ -71,20 +71,15 @@ const highlight = HighlightStyle.define([
 ]);
 
 function lightExtensions(): Extension[] {
-  return [
-    json(),
-    syntaxHighlighting(highlight),
-    foldGutter(),
-    bracketMatching(),
-    highlightSelectionMatches(),
-    lintGutter(),
-  ];
+  return [json(), foldGutter(), bracketMatching(), highlightSelectionMatches(), lintGutter()];
 }
 
 export interface JsonEditorProps {
   value: string;
   onChange?: (text: string) => void;
   readOnly?: boolean;
+  /** Syntax colouring (default on). */
+  highlight?: boolean;
   /** Parse error shown as a squiggle at the error position. */
   error?: ParseError | null;
   onCursor?: (offset: number) => void;
@@ -101,6 +96,8 @@ export function JsonEditor(props: JsonEditorProps) {
   let lastEmitted = props.value;
   let applyingExternal = false;
   const modeCompartment = new Compartment();
+  const hlCompartment = new Compartment();
+  const hlExt = () => (props.highlight !== false && !large ? syntaxHighlighting(highlight) : []);
   const editableCompartment = new Compartment();
   let large = props.value.length > LARGE_DOC_CHARS;
 
@@ -119,6 +116,7 @@ export function JsonEditor(props: JsonEditorProps) {
           search({ top: true }),
           marksField,
           modeCompartment.of(large ? [] : lightExtensions()),
+          hlCompartment.of(hlExt()),
           editableCompartment.of([EditorState.readOnly.of(!!props.readOnly), EditorView.editable.of(true)]),
           keymap.of([...searchKeymap, ...foldKeymap, ...historyKeymap, ...defaultKeymap, indentWithTab]),
           EditorView.contentAttributes.of({
@@ -130,7 +128,12 @@ export function JsonEditor(props: JsonEditorProps) {
               const isLarge = u.state.doc.length > LARGE_DOC_CHARS;
               if (isLarge !== large) {
                 large = isLarge;
-                view?.dispatch({ effects: modeCompartment.reconfigure(large ? [] : lightExtensions()) });
+                view?.dispatch({
+                  effects: [
+                    modeCompartment.reconfigure(large ? [] : lightExtensions()),
+                    hlCompartment.reconfigure(hlExt()),
+                  ],
+                });
               }
               // changes we applied ourselves (props.value) must not be serialized and echoed back
               if (!applyingExternal) {
@@ -221,6 +224,11 @@ export function JsonEditor(props: JsonEditorProps) {
     if (!view || v === lastEmitted) return;
     lastEmitted = v;
     applyExternal(v);
+  });
+
+  createEffect(() => {
+    props.highlight;
+    view?.dispatch({ effects: hlCompartment.reconfigure(hlExt()) });
   });
 
   createEffect(() => {

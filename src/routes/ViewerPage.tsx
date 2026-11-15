@@ -1,6 +1,7 @@
 import { useSearchParams } from '@solidjs/router';
 import {
   ChevronsDownUp,
+  Palette,
   ChevronsUpDown,
   ClipboardPaste,
   Copy,
@@ -277,6 +278,13 @@ export default function ViewerPage() {
       title: t('toolbar.save_history') + ' (Ctrl+S)',
     },
     {
+      id: 'highlight',
+      label: t('tree.highlight'),
+      icon: <Palette size={14} />,
+      onClick: () => updateSettings({ treeHighlight: !settings.treeHighlight }),
+      active: settings.treeHighlight,
+    },
+    {
       id: 'dups',
       label: t('toolbar.duplicates'),
       icon: <CopyCheck size={14} />,
@@ -346,6 +354,7 @@ export default function ViewerPage() {
     >
       <div class="min-h-0 flex-1">
         <JsonEditor
+          highlight={settings.treeHighlight}
           value={doc.text}
           error={doc.status === 'error' ? doc.error : null}
           marks={marks()}
@@ -393,7 +402,7 @@ export default function ViewerPage() {
         />
       </div>
       <PathBar />
-      <div class="min-h-0 flex-1">
+      <div class="min-h-0 flex-1" classList={{ 'tree-plain': !settings.treeHighlight }}>
         <SplitPane
           initial={58}
           left={<TreeView search={search} active={tab() === 'viewer'} />}

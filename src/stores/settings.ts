@@ -11,6 +11,8 @@ export interface Settings {
   language: Lang;
   indent: Indent;
   treeFontSize: number;
+  /** Colour JSON values by type in the Viewer tab. */
+  treeHighlight: boolean;
   /** Documents larger than this (bytes) are not parsed automatically while typing. */
   autoParseThreshold: number;
   autosaveDraft: boolean;
@@ -35,6 +37,7 @@ export const DEFAULT_SETTINGS: Settings = {
   language: detectLanguage(),
   indent: 2,
   treeFontSize: 13,
+  treeHighlight: true,
   autoParseThreshold: 1024 * 1024,
   autosaveDraft: true,
   saveToHistory: true,

@@ -120,3 +120,30 @@ test('a 12 MB draft is autosaved (IndexedDB) and restored after reload', async (
   await expect(page.getByText('Valid JSON')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/^12(\.\d)? MB$/)).toBeVisible();
 });
+
+test('Viewer: highlighting toggle switches type colours off and on', async ({ page }) => {
+  await page.goto('/');
+  await setEditor(page, '{"s":"text"}');
+  await page.getByRole('tab', { name: 'Viewer' }).click();
+  const btn = page.getByRole('button', { name: 'JSON highlighting' });
+  const wrap = page.locator('.tree-plain');
+  await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  await expect(wrap).toHaveCount(0);
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-pressed', 'false');
+  await expect(wrap).toHaveCount(1);
+});
+
+test('Text tab: highlighting toggle removes and restores syntax colours', async ({ page }) => {
+  await page.goto('/');
+  await setEditor(page, '{"s":"text"}');
+  const btn = page.getByRole('button', { name: 'JSON highlighting' });
+  const coloured = () => page.locator('.cm-content span[class^="ͼ"]').count();
+  await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(coloured).toBeGreaterThan(0);
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(coloured).toBe(0);
+  await btn.click();
+  await expect.poll(coloured).toBeGreaterThan(0);
+});

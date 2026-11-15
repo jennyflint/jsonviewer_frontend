@@ -223,6 +223,12 @@ body {
 .tree-row[aria-selected='true']:hover {
   background: var(--accent-soft);
 }
+.tree-plain {
+  --t-string: var(--text);
+  --t-number: var(--text);
+  --t-bool: var(--text);
+  --t-null: var(--text);
+}
 mark.hit {
   background: var(--match);
   color: inherit;

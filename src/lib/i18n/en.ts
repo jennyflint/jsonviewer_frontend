@@ -105,6 +105,7 @@ export const en = {
   'status.parse_now': 'Parse / Refresh tree',
   'status.draft_skipped': 'Too large for draft autosave (over 15 MB)',
 
+  'tree.highlight': 'JSON highlighting',
   'tree.label': 'JSON tree',
   'tree.empty': 'Paste or load JSON to see it as a tree.',
   'tree.invalid': 'The document is not valid JSON. Fix the error in the Text tab.',

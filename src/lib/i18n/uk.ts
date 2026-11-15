@@ -107,6 +107,7 @@ export const uk: Dict = {
   'status.parse_now': 'Розібрати / оновити дерево',
   'status.draft_skipped': 'Завеликий для автозбереження чернетки (понад 15 МБ)',
 
+  'tree.highlight': 'Підсвітка JSON',
   'tree.label': 'Дерево JSON',
   'tree.empty': 'Вставте або завантажте JSON, щоб побачити дерево.',
   'tree.invalid': 'Документ не є коректним JSON. Виправте помилку на вкладці «Текст».',
