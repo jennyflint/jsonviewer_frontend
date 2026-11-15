@@ -141,7 +141,7 @@ test('shared page does not touch the draft of the viewer', async ({ page }) => {
 test('share size limit is checked before calling the API', async ({ page }) => {
   const state = await mockApi(page);
   await page.goto('/');
-  const big = JSON.stringify({ d: 'x'.repeat(5 * 1024 * 1024 + 10) });
+  const big = JSON.stringify({ d: 'x'.repeat(15 * 1024 * 1024 + 10) });
   await page.evaluate((d) => navigator.clipboard.writeText(d), big);
   await page.getByRole('button', { name: 'Paste' }).click();
   await page.getByRole('button', { name: 'Share', exact: true }).click();

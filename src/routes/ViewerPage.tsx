@@ -2,6 +2,7 @@ import { useSearchParams } from '@solidjs/router';
 import {
   ChevronsDownUp,
   Palette,
+  IndentIncrease,
   ChevronsUpDown,
   ClipboardPaste,
   Copy,
@@ -60,7 +61,7 @@ import { api } from '../lib/api/endpoints';
 import { copyText, readText } from '../lib/clipboard';
 import { downloadText } from '../lib/files';
 import { locate } from '../lib/json/parser';
-import { nodeAtOffset } from '../lib/json/access';
+import { memberKeysInRange, nodeAtOffset, typeName } from '../lib/json/access';
 import { useShortcuts } from '../lib/shortcuts';
 import { errorMessage, t } from '../lib/i18n';
 import type { Indent } from '../lib/json/format';
@@ -181,6 +182,17 @@ export default function ViewerPage() {
     }
   };
 
+  /** Key ranges in the viewport, tagged with the type of their value (only while the model matches the text). */
+  const keyMarks = (from: number, to: number, len: number): Mark[] => {
+    const m = getModel();
+    if (!m || doc.status !== 'ok' || m.text.length !== len) return [];
+    return memberKeysInRange(m, from, to).map((k) => ({
+      from: k.from,
+      to: k.to,
+      cls: `cm-k-${typeName(m, k.id)}`,
+    }));
+  };
+
   const dupCount = createMemo(() => dupKeyGroupCount(getDupNodes(), getModel));
 
   const marks = createMemo<Mark[]>(() => {
@@ -278,6 +290,30 @@ export default function ViewerPage() {
       title: t('toolbar.save_history') + ' (Ctrl+S)',
     },
     {
+      id: 'foldall',
+      label: t('editor.fold_all'),
+      icon: <ChevronsDownUp size={14} />,
+      onClick: () => editor?.foldAll(),
+      hidden: tab() !== 'text',
+      disabled: !hasText(),
+    },
+    {
+      id: 'unfoldall',
+      label: t('editor.unfold_all'),
+      icon: <ChevronsUpDown size={14} />,
+      onClick: () => editor?.unfoldAll(),
+      hidden: tab() !== 'text',
+      disabled: !hasText(),
+    },
+    {
+      id: 'guides',
+      label: t('editor.indent_guides'),
+      icon: <IndentIncrease size={14} />,
+      onClick: () => updateSettings({ indentGuides: !settings.indentGuides }),
+      active: settings.indentGuides,
+      hidden: tab() !== 'text',
+    },
+    {
       id: 'highlight',
       label: t('tree.highlight'),
       icon: <Palette size={14} />,
@@ -355,6 +391,9 @@ export default function ViewerPage() {
       <div class="min-h-0 flex-1">
         <JsonEditor
           highlight={settings.treeHighlight}
+          indentGuides={settings.indentGuides}
+          keyRevision={getModel()}
+          keyMarks={keyMarks}
           value={doc.text}
           error={doc.status === 'error' ? doc.error : null}
           marks={marks()}

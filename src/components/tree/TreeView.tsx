@@ -5,7 +5,7 @@ import { For, Show, createEffect, createMemo, createSignal, on } from 'solid-js'
 import { useDoc } from '../../stores/document';
 import type { DocumentStore } from '../../stores/document';
 import { VisibleRows } from '../../lib/json/tree-model';
-import { isContainer, keyOf, previewValue, raw, stringValue } from '../../lib/json/access';
+import { isContainer, keyOf, typeName, previewValue, raw, stringValue } from '../../lib/json/access';
 import { prettyNode } from '../../lib/json/format';
 import { buildPath } from '../../lib/json/path';
 import { T_ARRAY, T_STRING } from '../../lib/json/parser';
@@ -408,7 +408,10 @@ function TreeRow(props: {
         </Show>
       </span>
       {typeIcon(type())}
-      <span class="ml-1 font-semibold" style={{ color: isIndex() ? 'var(--muted)' : 'var(--t-key)' }}>
+      <span
+        class="ml-1 font-semibold"
+        style={{ color: isIndex() ? 'var(--muted)' : `var(--k-${typeName(m(), props.id)})` }}
+      >
         {hl(key(), true)}
       </span>
       <Show when={props.dup}>

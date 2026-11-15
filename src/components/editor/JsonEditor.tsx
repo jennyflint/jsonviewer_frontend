@@ -7,17 +7,20 @@ import {
   highlightActiveLine,
   highlightActiveLineGutter,
   keymap,
+  ViewPlugin,
   lineNumbers,
 } from '@codemirror/view';
-import type { DecorationSet } from '@codemirror/view';
+import type { DecorationSet, ViewUpdate } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { json } from '@codemirror/lang-json';
 import {
   HighlightStyle,
   bracketMatching,
+  foldAll,
   foldGutter,
   foldKeymap,
   syntaxHighlighting,
+  unfoldAll,
 } from '@codemirror/language';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { setDiagnostics, lintGutter } from '@codemirror/lint';
@@ -31,6 +34,9 @@ export interface EditorApi {
   /** Move the cursor / selection to a range and scroll it into view. */
   select: (from: number, to: number, flash?: boolean) => void;
   requestMeasure: () => void;
+  /** Collapse / expand every foldable object and array. */
+  foldAll: () => void;
+  unfoldAll: () => void;
 }
 
 export interface Mark {
@@ -71,13 +77,93 @@ const highlight = HighlightStyle.define([
 ]);
 
 function lightExtensions(): Extension[] {
-  return [json(), foldGutter(), bracketMatching(), highlightSelectionMatches(), lintGutter()];
+  return [bracketMatching(), highlightSelectionMatches(), lintGutter()];
+}
+
+/** VS Code-style indent guides: a thin vertical line per indentation level, drawn behind the leading whitespace. */
+function indentGuides(): Extension {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+      constructor(view: EditorView) {
+        this.decorations = this.build(view);
+      }
+      update(u: ViewUpdate) {
+        if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view);
+      }
+      build(view: EditorView): DecorationSet {
+        const { doc } = view.state;
+        const tab = view.state.tabSize;
+        const found: { from: number; to: number; cols: number }[] = [];
+        let unit = 0;
+        for (const r of view.visibleRanges) {
+          for (let pos = r.from; pos <= r.to;) {
+            const line = doc.lineAt(pos);
+            const m = /^[ \t]+/.exec(line.text.slice(0, 200));
+            if (m && line.text.length > m[0].length) {
+              const cols = [...m[0]].reduce((n, c) => n + (c === '\t' ? tab : 1), 0);
+              found.push({ from: line.from, to: line.from + m[0].length, cols });
+              if (!unit) unit = m[0].includes('\t') ? tab : Math.min(cols, 8);
+            }
+            pos = line.to + 1;
+          }
+        }
+        const deco = Decoration.mark({
+          class: 'cm-indent-guide',
+          attributes: { style: `background-size:${unit || 2}ch 100%` },
+        });
+        return Decoration.set(found.map((f) => deco.range(f.from, f.to)));
+      }
+    },
+    { decorations: (v) => v.decorations },
+  );
+}
+
+const refreshKeys = StateEffect.define<null>();
+
+/** Colours object keys by the type of their value, for the visible part of the document only. */
+function keyColorPlugin(get: () => JsonEditorProps['keyMarks']) {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet = Decoration.none;
+      constructor(view: EditorView) {
+        this.decorations = this.build(view);
+      }
+      update(u: ViewUpdate) {
+        if (
+          u.docChanged ||
+          u.viewportChanged ||
+          u.transactions.some((t) => t.effects.some((e) => e.is(refreshKeys)))
+        ) {
+          this.decorations = this.build(u.view);
+        }
+      }
+      build(view: EditorView): DecorationSet {
+        const fn = get();
+        if (!fn) return Decoration.none;
+        const len = view.state.doc.length;
+        const ranges = [];
+        for (const r of view.visibleRanges) {
+          for (const m of fn(r.from, r.to, len))
+            ranges.push(Decoration.mark({ class: m.cls }).range(m.from, m.to));
+        }
+        return Decoration.set(ranges, true);
+      }
+    },
+    { decorations: (v) => v.decorations },
+  );
 }
 
 export interface JsonEditorProps {
   value: string;
   onChange?: (text: string) => void;
   readOnly?: boolean;
+  /** Returns key ranges (with a CSS class) inside [from, to) for a document of the given length. */
+  keyMarks?: (from: number, to: number, docLength: number) => Mark[];
+  /** Changes whenever `keyMarks` results may have changed (e.g. a new parse). */
+  keyRevision?: unknown;
+  /** Vertical indentation guide lines (default off). */
+  indentGuides?: boolean;
   /** Syntax colouring (default on). */
   highlight?: boolean;
   /** Parse error shown as a squiggle at the error position. */
@@ -97,7 +183,8 @@ export function JsonEditor(props: JsonEditorProps) {
   let applyingExternal = false;
   const modeCompartment = new Compartment();
   const hlCompartment = new Compartment();
-  const hlExt = () => (props.highlight !== false && !large ? syntaxHighlighting(highlight) : []);
+  const guidesCompartment = new Compartment();
+  const hlExt = () => (props.highlight !== false ? syntaxHighlighting(highlight) : []);
   const editableCompartment = new Compartment();
   let large = props.value.length > LARGE_DOC_CHARS;
 
@@ -116,7 +203,11 @@ export function JsonEditor(props: JsonEditorProps) {
           search({ top: true }),
           marksField,
           modeCompartment.of(large ? [] : lightExtensions()),
+          json(),
+          keyColorPlugin(() => (props.highlight !== false ? props.keyMarks : undefined)),
+          foldGutter(),
           hlCompartment.of(hlExt()),
+          guidesCompartment.of(props.indentGuides ? indentGuides() : []),
           editableCompartment.of([EditorState.readOnly.of(!!props.readOnly), EditorView.editable.of(true)]),
           keymap.of([...searchKeymap, ...foldKeymap, ...historyKeymap, ...defaultKeymap, indentWithTab]),
           EditorView.contentAttributes.of({
@@ -153,6 +244,8 @@ export function JsonEditor(props: JsonEditorProps) {
     props.apiRef?.({
       focus: () => view?.focus(),
       requestMeasure: () => view?.requestMeasure(),
+      foldAll: () => view && foldAll(view),
+      unfoldAll: () => view && unfoldAll(view),
       select: (from, to, flash = true) => {
         if (!view) return;
         const len = view.state.doc.length;
@@ -224,6 +317,18 @@ export function JsonEditor(props: JsonEditorProps) {
     if (!view || v === lastEmitted) return;
     lastEmitted = v;
     applyExternal(v);
+  });
+
+  createEffect(() => {
+    const on = !!props.indentGuides;
+    view?.dispatch({ effects: guidesCompartment.reconfigure(on ? indentGuides() : []) });
+  });
+
+  createEffect(() => {
+    void props.keyRevision;
+    void props.highlight;
+    void props.keyMarks;
+    view?.dispatch({ effects: refreshKeys.of(null) });
   });
 
   createEffect(() => {

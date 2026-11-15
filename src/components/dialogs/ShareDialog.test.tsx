@@ -75,7 +75,7 @@ describe('ShareDialog', () => {
 
   it('refuses oversized documents without calling the API', async () => {
     const spy = vi.spyOn(api, 'createShare');
-    open('x'.repeat(5 * 1024 * 1024 + 1));
+    open('x'.repeat(15 * 1024 * 1024 + 1));
     expect(screen.getByRole('button', { name: 'Create link' })).toBeDisabled();
     expect(screen.getByRole('alert')).toHaveTextContent('too large');
     expect(spy).not.toHaveBeenCalled();

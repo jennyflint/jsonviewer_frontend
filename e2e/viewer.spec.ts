@@ -147,3 +147,87 @@ test('Text tab: highlighting toggle removes and restores syntax colours', async 
   await btn.click();
   await expect.poll(coloured).toBeGreaterThan(0);
 });
+
+test('Text tab: syntax highlighting still works for an 8 MB document', async ({ page }) => {
+  await page.goto('/');
+  const big = JSON.stringify(
+    Array.from({ length: 200000 }, (_, i) => ({ id: i, name: 'user' + i, ok: true })),
+  );
+  expect(big.length).toBeGreaterThan(8 * 1024 * 1024);
+  await page.evaluate((d) => navigator.clipboard.writeText(d), big);
+  await page.getByRole('button', { name: 'Paste' }).click();
+  await expect(page.getByText('Valid JSON')).toBeVisible({ timeout: 60_000 });
+  await expect
+    .poll(() => page.locator('.cm-content span[class^="ͼ"]').count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+});
+
+test('Text tab: collapse all / expand all fold the document', async ({ page }) => {
+  await page.goto('/');
+  await setEditor(page, JSON.stringify({ a: { x: 1, y: [1, 2, 3] }, b: { z: 2 } }, null, 2));
+  await page.getByRole('button', { name: 'Format', exact: true }).click();
+  const lines = page.locator('.cm-content .cm-line');
+  await expect.poll(() => lines.count()).toBeGreaterThan(10);
+  await page.getByRole('button', { name: 'Collapse all' }).click();
+  await expect.poll(() => lines.count()).toBeLessThan(5);
+  await expect(page.locator('.cm-foldPlaceholder').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Expand all' }).click();
+  await expect.poll(() => lines.count()).toBeGreaterThan(10);
+});
+
+test('keys are coloured by value type, in Text and Viewer, and the colours are configurable', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await setEditor(page, '{"s":"x","n":1,"b":true,"a":[1],"o":{"k":null}}');
+  await expect(page.getByText('Valid JSON')).toBeVisible();
+  for (const t of ['string', 'number', 'boolean', 'array', 'object', 'null']) {
+    await expect(page.locator(`.cm-content .cm-k-${t}`).first()).toBeVisible();
+  }
+  const colorOf = (sel: string) =>
+    page
+      .locator(sel)
+      .first()
+      .evaluate((el) => getComputedStyle(el).color);
+  const a = await colorOf('.cm-content .cm-k-string');
+  const b = await colorOf('.cm-content .cm-k-number');
+  expect(a).not.toBe(b);
+
+  // configure: string keys red
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByLabel('string', { exact: true }).fill('#ff0000');
+  await page.keyboard.press('Escape');
+  await expect.poll(() => colorOf('.cm-content .cm-k-string')).toBe('rgb(255, 0, 0)');
+  await page.getByRole('tab', { name: 'Viewer' }).click();
+  const row = page.getByRole('treeitem').filter({ hasText: 'x' }).filter({ hasText: '"s"' }).first();
+  void row;
+  await expect
+    .poll(() =>
+      page
+        .locator('[role=treeitem] span.font-semibold')
+        .nth(1)
+        .evaluate((el) => getComputedStyle(el).color),
+    )
+    .toBe('rgb(255, 0, 0)');
+
+  // highlighting off → plain keys
+  await page.getByRole('button', { name: 'JSON highlighting' }).click();
+  await page.getByRole('tab', { name: 'Text' }).click();
+  await expect(page.locator('.cm-content .cm-k-string')).toHaveCount(0);
+});
+
+test('Text tab: indent guides toggle draws and removes the vertical lines', async ({ page }) => {
+  await page.goto('/');
+  await setEditor(page, JSON.stringify({ a: { b: { c: [1, 2, 3] } }, d: 1 }, null, 2));
+  const btn = page.getByRole('button', { name: 'Indent guides' });
+  await expect(btn).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.cm-indent-guide')).toHaveCount(0);
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => page.locator('.cm-indent-guide').count()).toBeGreaterThan(5);
+  await page.screenshot({
+    clip: { x: 0, y: 100, width: 600, height: 300 },
+  });
+  await btn.click();
+  await expect(page.locator('.cm-indent-guide')).toHaveCount(0);
+});

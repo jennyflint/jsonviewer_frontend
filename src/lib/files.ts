@@ -25,6 +25,6 @@ export function formatBytes(n: number, locale?: string): string {
   return f(n / (1024 * 1024), 'MB');
 }
 
-export const MAX_DOCUMENT_BYTES = Number(import.meta.env.VITE_MAX_DOCUMENT_BYTES ?? 5242880);
-export const MAX_FETCH_BYTES = Number(import.meta.env.VITE_MAX_FETCH_BYTES ?? 10485760);
+export const MAX_DOCUMENT_BYTES = Number(import.meta.env.VITE_MAX_DOCUMENT_BYTES ?? 15728640);
+export const MAX_FETCH_BYTES = Number(import.meta.env.VITE_MAX_FETCH_BYTES ?? 15728640);
 export const PUBLIC_URL = (import.meta.env.VITE_PUBLIC_URL as string | undefined) ?? '';

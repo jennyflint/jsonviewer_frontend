@@ -31,6 +31,12 @@
   --t-null: #6b21a8;
   --t-key: #1a1f2b;
   --focus: #4338ca;
+  --k-string: #00695c;
+  --k-number: #0b57d0;
+  --k-boolean: #b45309;
+  --k-array: #a21caf;
+  --k-object: #1a1f2b;
+  --k-null: #566074;
   color-scheme: light;
 }
 
@@ -62,6 +68,12 @@
   --t-null: #d4a5ff;
   --t-key: #e6e9f0;
   --focus: #8b93ff;
+  --k-string: #4fd1c5;
+  --k-number: #7db3ff;
+  --k-boolean: #ffb454;
+  --k-array: #f0abfc;
+  --k-object: #e6e9f0;
+  --k-null: #9aa4b8;
   color-scheme: dark;
 }
 
@@ -224,6 +236,12 @@ body {
   background: var(--accent-soft);
 }
 .tree-plain {
+  --k-string: var(--text);
+  --k-number: var(--text);
+  --k-boolean: var(--text);
+  --k-array: var(--text);
+  --k-object: var(--text);
+  --k-null: var(--text);
   --t-string: var(--text);
   --t-number: var(--text);
   --t-bool: var(--text);
@@ -341,4 +359,40 @@ mark.hit.active {
 .cm-merge-active {
   outline: 2px solid var(--focus);
   outline-offset: -2px;
+}
+
+/* indent guides */
+.cm-indent-guide {
+  background-image: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--muted) 55%, transparent) 1px,
+    transparent 1px
+  );
+  background-repeat: repeat-x;
+}
+
+/* keys coloured by the type of their value (text editor) */
+.cm-k-string,
+.cm-k-string * {
+  color: var(--k-string) !important;
+}
+.cm-k-number,
+.cm-k-number * {
+  color: var(--k-number) !important;
+}
+.cm-k-boolean,
+.cm-k-boolean * {
+  color: var(--k-boolean) !important;
+}
+.cm-k-array,
+.cm-k-array * {
+  color: var(--k-array) !important;
+}
+.cm-k-object,
+.cm-k-object * {
+  color: var(--k-object) !important;
+}
+.cm-k-null,
+.cm-k-null * {
+  color: var(--k-null) !important;
 }

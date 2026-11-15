@@ -6,6 +6,9 @@ import type { Indent } from '../lib/json/format';
 export type Theme = 'light' | 'dark' | 'system';
 export type Lang = 'en' | 'uk';
 
+export type KeyType = 'string' | 'number' | 'boolean' | 'array' | 'object' | 'null';
+export const KEY_TYPES: KeyType[] = ['string', 'number', 'boolean', 'array', 'object', 'null'];
+
 export interface Settings {
   theme: Theme;
   language: Lang;
@@ -13,6 +16,10 @@ export interface Settings {
   treeFontSize: number;
   /** Colour JSON values by type in the Viewer tab. */
   treeHighlight: boolean;
+  /** Indent guide lines in the Text tab. */
+  indentGuides: boolean;
+  /** Custom colour of keys by the type of their value (unset = theme default). */
+  keyColors: Partial<Record<KeyType, string>>;
   /** Documents larger than this (bytes) are not parsed automatically while typing. */
   autoParseThreshold: number;
   autosaveDraft: boolean;
@@ -38,6 +45,8 @@ export const DEFAULT_SETTINGS: Settings = {
   indent: 2,
   treeFontSize: 13,
   treeHighlight: true,
+  indentGuides: false,
+  keyColors: {},
   autoParseThreshold: 1024 * 1024,
   autosaveDraft: true,
   saveToHistory: true,
@@ -92,6 +101,14 @@ export function initSettingsEffects(): void {
     });
     createEffect(() => {
       document.documentElement.lang = settings.language;
+    });
+    createEffect(() => {
+      const style = document.documentElement.style;
+      for (const k of KEY_TYPES) {
+        const c = settings.keyColors?.[k];
+        if (c && /^#[0-9a-f]{6}$/i.test(c)) style.setProperty(`--k-${k}`, c);
+        else style.removeProperty(`--k-${k}`);
+      }
     });
     createEffect(() => {
       document.documentElement.style.setProperty('--tree-font-size', `${settings.treeFontSize}px`);

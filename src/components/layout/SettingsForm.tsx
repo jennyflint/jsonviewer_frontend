@@ -1,8 +1,29 @@
+import { For } from 'solid-js';
 import { Select } from '../ui/Select';
 import { Toggle } from '../ui/Toggle';
-import { settings, updateSettings } from '../../stores/settings';
+import { KEY_TYPES, settings, updateSettings } from '../../stores/settings';
+import type { KeyType } from '../../stores/settings';
 import { t } from '../../lib/i18n';
 import type { Indent } from '../../lib/json/format';
+
+/** Current colour of a key type: the custom one, else the theme default read from CSS. */
+function keyColor(k: KeyType): string {
+  const custom = settings.keyColors?.[k];
+  if (custom) return custom;
+  void settings.theme; // re-read the default when the theme changes
+  const v =
+    typeof document === 'undefined'
+      ? ''
+      : getComputedStyle(document.documentElement).getPropertyValue(`--k-${k}`).trim();
+  return /^#[0-9a-f]{6}$/i.test(v) ? v : '#000000';
+}
+
+function setKeyColor(k: KeyType, color: string | undefined): void {
+  const next = { ...settings.keyColors };
+  if (color) next[k] = color;
+  else delete next[k];
+  updateSettings({ keyColors: next });
+}
 
 /** All persisted preferences (theme, language, indent, tree font, thresholds, diff defaults). */
 export function SettingsForm() {
@@ -120,6 +141,43 @@ export function SettingsForm() {
           label={t('settings.diff_ignore_key_order')}
         />
       </div>
+      <fieldset class="rounded-md border border-border p-3 sm:col-span-2">
+        <legend class="px-1 text-sm font-medium">{t('settings.key_colors')}</legend>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+          <For each={KEY_TYPES}>
+            {(k) => (
+              <div class="flex items-center gap-2 text-sm">
+                <input
+                  type="color"
+                  class="h-7 w-9 cursor-pointer rounded border border-border bg-transparent p-0.5"
+                  aria-label={t(`settings.key_${k}` as const)}
+                  value={keyColor(k)}
+                  onInput={(e) => setKeyColor(k, e.currentTarget.value)}
+                />
+                <span class="font-semibold" style={{ color: `var(--k-${k})` }}>
+                  {t(`settings.key_${k}` as const)}
+                </span>
+                {settings.keyColors?.[k] && (
+                  <button
+                    type="button"
+                    class="text-xs text-muted underline"
+                    onClick={() => setKeyColor(k, undefined)}
+                  >
+                    {t('settings.key_reset')}
+                  </button>
+                )}
+              </div>
+            )}
+          </For>
+        </div>
+        <button
+          type="button"
+          class="mt-2 text-xs text-accent underline"
+          onClick={() => updateSettings({ keyColors: {} })}
+        >
+          {t('settings.key_reset_all')}
+        </button>
+      </fieldset>
     </div>
   );
 }

@@ -145,3 +145,29 @@ export function nodeAtOffset(m: JsonModel, offset: number): number {
   }
   return found >= 0 && (m.parent[found] as number) < 0 ? 0 : -1;
 }
+
+/** Object members whose key token starts in [from, to): used to colour keys by value type in the viewport. */
+export function memberKeysInRange(
+  m: JsonModel,
+  from: number,
+  to: number,
+  limit = 5000,
+): { from: number; to: number; id: number }[] {
+  const spanStart = (id: number) => {
+    const ks = m.keyStart[id] as number;
+    return ks >= 0 ? ks : (m.start[id] as number);
+  };
+  let lo = 0;
+  let hi = m.count;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (spanStart(mid) < from) lo = mid + 1;
+    else hi = mid;
+  }
+  const out: { from: number; to: number; id: number }[] = [];
+  for (let id = lo; id < m.count && spanStart(id) < to && out.length < limit; id++) {
+    const ks = m.keyStart[id] as number;
+    if (ks >= 0) out.push({ from: ks, to: m.keyEnd[id] as number, id });
+  }
+  return out;
+}

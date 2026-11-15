@@ -47,7 +47,7 @@ describe('files', () => {
   });
   it('reads files and exposes size limits', async () => {
     expect(await readFileText({ text: async () => '{"a":1}' } as unknown as File)).toBe('{"a":1}');
-    expect(MAX_DOCUMENT_BYTES).toBe(5242880);
+    expect(MAX_DOCUMENT_BYTES).toBe(15728640);
   });
 });
 
@@ -112,5 +112,19 @@ describe('model access helpers', () => {
     if (!lr.ok) throw new Error();
     expect(previewValue(lr.model, 0, 20).length).toBeLessThan(30);
     expect(previewValue(lr.model, 0, 20).endsWith('…"')).toBe(true);
+  });
+});
+
+describe('memberKeysInRange', () => {
+  it('returns only the keys that start inside the range, in order', async () => {
+    const { memberKeysInRange } = await import('./json/access');
+    const r = parseJson('{"a":1,"b":[true],"c":{"d":null}}');
+    if (!r.ok) throw new Error();
+    const all = memberKeysInRange(r.model, 0, r.model.text.length);
+    expect(all.map((k) => r.model.text.slice(k.from, k.to))).toEqual(['"a"', '"b"', '"c"', '"d"']);
+    const from = r.model.text.indexOf('"c"');
+    expect(memberKeysInRange(r.model, from, r.model.text.length).map((k) => k.id)).toHaveLength(2);
+    expect(memberKeysInRange(r.model, 0, r.model.text.length, 2)).toHaveLength(2);
+    expect(memberKeysInRange(r.model, 1000, 2000)).toEqual([]);
   });
 });
