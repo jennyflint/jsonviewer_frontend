@@ -18,8 +18,15 @@ import {
   Type,
   Wand2,
   CopyCheck,
-} from 'lucide-solid';
-import { Show, createMemo, createSignal, onMount } from 'solid-js';
+  Table2,
+  Search,
+  ShieldAlert,
+  Star,
+  History as VersionsIcon,
+  FileCheck2,
+  Crosshair,
+} from '../lib/icons';
+import { Show, Suspense, createEffect, createMemo, createSignal, lazy, onMount } from 'solid-js';
 import { JsonEditor } from '../components/editor/JsonEditor';
 import type { EditorApi, Mark } from '../components/editor/JsonEditor';
 import { EditorToolbar } from '../components/editor/EditorToolbar';
@@ -34,11 +41,36 @@ import { TreeView, collapseAll, expandAll, expandToLevel } from '../components/t
 import { PropertyPanel } from '../components/tree/PropertyPanel';
 import { PathBar } from '../components/tree/PathBar';
 import { TreeSearch, createTreeSearch } from '../components/tree/TreeSearch';
-import { DuplicatesPanel, dupKeyGroupCount } from '../components/duplicates/DuplicatesPanel';
-import { LoadUrlDialog } from '../components/dialogs/LoadUrlDialog';
-import { ShareDialog } from '../components/dialogs/ShareDialog';
+import { dupKeyGroupCount } from '../lib/json/dupcount';
+const DuplicatesPanel = lazy(() =>
+  import('../components/duplicates/DuplicatesPanel').then((m) => ({ default: m.DuplicatesPanel })),
+);
+const TableView = lazy(() => import('../components/tree/TableView').then((m) => ({ default: m.TableView })));
+const QueryPanel = lazy(() =>
+  import('../components/query/QueryPanel').then((m) => ({ default: m.QueryPanel })),
+);
+import { DocTabs } from '../components/layout/DocTabs';
+const RedactDialog = lazy(() =>
+  import('../components/dialogs/RedactDialog').then((m) => ({ default: m.RedactDialog })),
+);
+const BookmarksDialog = lazy(() =>
+  import('../components/dialogs/BookmarksDialog').then((m) => ({ default: m.BookmarksDialog })),
+);
+import { bookmarksOf } from '../stores/bookmarks';
+import { activeTabId } from '../stores/tabs';
+const LoadUrlDialog = lazy(() =>
+  import('../components/dialogs/LoadUrlDialog').then((m) => ({ default: m.LoadUrlDialog })),
+);
+const ShareDialog = lazy(() =>
+  import('../components/dialogs/ShareDialog').then((m) => ({ default: m.ShareDialog })),
+);
 import {
   clearDocument,
+  confirmLenient,
+  ensureParsed,
+  getFocus,
+  setFocus,
+  snapshot,
   mainDocument,
   doc,
   getDupNodes,
@@ -51,7 +83,7 @@ import {
   setText,
   transform,
 } from '../stores/document';
-import { settings, updateSettings } from '../stores/settings';
+import { featureOn, settings, updateSettings } from '../stores/settings';
 import { auth } from '../stores/auth';
 import { confirmAction } from '../stores/confirm';
 import { autosaveToHistory } from '../stores/historySync';
@@ -66,11 +98,21 @@ import { useShortcuts } from '../lib/shortcuts';
 import { errorMessage, t } from '../lib/i18n';
 import type { Indent } from '../lib/json/format';
 
+const VersionsDialog = lazy(() =>
+  import('../components/dialogs/VersionsDialog').then((m) => ({ default: m.VersionsDialog })),
+);
+
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 export default function ViewerPage() {
-  const [tab, setTab] = createSignal<'text' | 'viewer'>('text');
-  const [dupOpen, setDupOpen] = createSignal(false);
+  const [tab, setTab] = createSignal<'text' | 'viewer' | 'table'>('text');
+  const [side, setSide] = createSignal<'dups' | 'query' | null>(null);
+  const dupOpen = () => side() === 'dups';
+  const setDupOpen = (v: boolean | ((o: boolean) => boolean)) =>
+    setSide((typeof v === 'function' ? v(dupOpen()) : v) ? 'dups' : null);
+  const [redactOpen, setRedactOpen] = createSignal(false);
+  const [bookmarksOpen, setBookmarksOpen] = createSignal(false);
+  const [versionsOpen, setVersionsOpen] = createSignal(false);
   const [urlOpen, setUrlOpen] = createSignal(false);
   const [shareOpen, setShareOpen] = createSignal(false);
   const [cursor, setCursor] = createSignal<Cursor>({ line: 1, column: 1, offset: 0 });
@@ -90,7 +132,7 @@ export default function ViewerPage() {
     editor.select(ks >= 0 ? ks : (m.start[id] as number), m.end[id] as number, true);
   };
 
-  const switchTab = (next: 'text' | 'viewer') => {
+  const switchTab = (next: 'text' | 'viewer' | 'table') => {
     setTab(next);
     queueMicrotask(() => {
       if (next === 'text') {
@@ -119,6 +161,7 @@ export default function ViewerPage() {
     }));
 
   const onTransform = async (kind: 'format' | 'minify' | 'sort') => {
+    await ensureParsed();
     if (doc.status === 'error' && doc.error) {
       toast.error(t('toolbar.cannot_format'), {
         detail: `${doc.error.message} (${t('status.line_col', { line: doc.error.line, col: doc.error.column })})`,
@@ -126,14 +169,28 @@ export default function ViewerPage() {
       editor?.select(doc.error.offset, doc.error.offset + 1, false);
       return;
     }
+    if (!(await confirmLenient(t(`toolbar.${kind}` as const)))) return;
     const r = await transform(kind);
     if (!r.ok) {
+      if ('cancelled' in r) {
+        toast.info(t('job.cancelled'));
+        return;
+      }
       toast.error(t('toolbar.cannot_format'), {
         detail: `${r.error.message} (${t('status.line_col', { line: r.error.line, col: r.error.column })})`,
       });
       return;
     }
     if (kind === 'format') void autosaveToHistory(doc.text, 'format');
+  };
+
+  /** JSON5 / JSONC -> strict JSON (comments are dropped). */
+  const convertStrict = async () => {
+    await ensureParsed();
+    if (!(await confirmLenient(t('lenient.convert')))) return;
+    const r = await transform('strict');
+    if (r.ok) toast.success(t('lenient.converted'));
+    else if ('cancelled' in r) toast.info(t('job.cancelled'));
   };
 
   const paste = async () => {
@@ -144,6 +201,7 @@ export default function ViewerPage() {
       return;
     }
     if (!(await confirmReplace())) return;
+    snapshot(t('versions.before_paste'));
     setText(text, { fromUser: true, immediate: true });
   };
 
@@ -192,6 +250,14 @@ export default function ViewerPage() {
       cls: `cm-k-${typeName(m, k.id)}`,
     }));
   };
+
+  // switching a feature off while it is in use closes / resets it
+  createEffect(() => {
+    if (!featureOn('duplicates') && side() === 'dups') setSide(null);
+    if (!featureOn('query') && side() === 'query') setSide(null);
+    if (!featureOn('table') && tab() === 'table') switchTab('text');
+    if (!featureOn('focusBranch') && getFocus() >= 0) setFocus(-1);
+  });
 
   const dupCount = createMemo(() => dupKeyGroupCount(getDupNodes(), getModel));
 
@@ -322,7 +388,41 @@ export default function ViewerPage() {
       active: settings.treeHighlight,
     },
     {
+      id: 'strict',
+      label: t('lenient.convert'),
+      icon: <FileCheck2 size={14} />,
+      onClick: () => void convertStrict(),
+      hidden: !doc.lenient || !featureOn('json5'),
+      title: t('lenient.convert_hint'),
+    },
+    {
+      id: 'redact',
+      hidden: !featureOn('redact'),
+      label: t('redact.button'),
+      icon: <ShieldAlert size={14} />,
+      onClick: () => setRedactOpen(true),
+      disabled: !hasText() || doc.status !== 'ok',
+    },
+    {
+      id: 'query',
+      hidden: !featureOn('query'),
+      label: t('query.button'),
+      icon: <Search size={14} />,
+      onClick: () => setSide((s) => (s === 'query' ? null : 'query')),
+      active: side() === 'query',
+      disabled: !hasText() || doc.status !== 'ok',
+    },
+    {
+      id: 'versions',
+      hidden: !featureOn('versions'),
+      label: t('versions.button'),
+      icon: <VersionsIcon size={14} />,
+      onClick: () => setVersionsOpen(true),
+      disabled: !hasText(),
+    },
+    {
       id: 'dups',
+      hidden: !featureOn('duplicates'),
       label: t('toolbar.duplicates'),
       icon: <CopyCheck size={14} />,
       onClick: () => setDupOpen((o) => !o),
@@ -345,6 +445,7 @@ export default function ViewerPage() {
     { key: 'm', mod: true, shift: true, handler: () => void onTransform('minify') },
     { key: '1', mod: true, handler: () => switchTab('text') },
     { key: '2', mod: true, handler: () => switchTab('viewer') },
+    { key: '3', mod: true, handler: () => featureOn('table') && switchTab('table') },
     { key: 'f', mod: true, when: () => tab() === 'viewer', handler: () => searchInput?.focus() },
     { key: 's', mod: true, shift: true, handler: () => hasText() && setShareOpen(true) },
     { key: 's', mod: true, handler: () => void saveHistory() },
@@ -440,6 +541,27 @@ export default function ViewerPage() {
           ]}
           onChange={(n) => n > 0 && expandToLevel(mainDocument, n)}
         />
+        <Show when={featureOn('bookmarks')}>
+          <Button size="sm" onClick={() => setBookmarksOpen(true)}>
+            <Star size={14} /> {t('bookmarks.button')}
+            <Show when={bookmarksOf(activeTabId()).length > 0}>
+              <span class="rounded-full bg-accent-soft px-1.5 text-[10px] font-bold text-accent">
+                {bookmarksOf(activeTabId()).length}
+              </span>
+            </Show>
+          </Button>
+        </Show>
+        <Show when={getFocus() >= 0}>
+          <span
+            class="ml-auto inline-flex items-center gap-2 rounded-md bg-accent-soft px-2 py-0.5 text-xs"
+            data-testid="focus-banner"
+          >
+            <Crosshair size={12} /> {t('tree.focus_active')}
+            <button class="font-semibold text-accent underline" onClick={() => setFocus(-1)}>
+              {t('tree.focus_exit')}
+            </button>
+          </span>
+        </Show>
       </div>
       <PathBar />
       <div class="min-h-0 flex-1" classList={{ 'tree-plain': !settings.treeHighlight }}>
@@ -457,10 +579,13 @@ export default function ViewerPage() {
       <TabList
         label={t('tabs.label')}
         value={tab()}
-        onChange={(v) => switchTab(v as 'text' | 'viewer')}
+        onChange={(v) => switchTab(v as 'text' | 'viewer' | 'table')}
         tabs={[
           { id: 'text', label: t('tabs.text'), icon: <Type size={14} /> },
           { id: 'viewer', label: t('tabs.viewer'), icon: <ListTree size={14} /> },
+          ...(featureOn('table')
+            ? [{ id: 'table', label: t('tabs.table'), icon: <Table2 size={14} /> }]
+            : []),
         ]}
       />
       <div class="min-h-0 flex-1" classList={{ hidden: tab() !== 'text' }}>
@@ -469,11 +594,21 @@ export default function ViewerPage() {
       <div class="min-h-0 flex-1" classList={{ hidden: tab() !== 'viewer' }}>
         {viewerPane()}
       </div>
+      <div class="min-h-0 flex-1" classList={{ hidden: tab() !== 'table' }}>
+        <Show when={tab() === 'table'}>
+          <Suspense fallback={null}>
+            <TableView />
+          </Suspense>
+        </Show>
+      </div>
     </div>
   );
 
   return (
     <div class="flex h-full min-h-0 flex-col">
+      <Show when={featureOn('tabs')}>
+        <DocTabs />
+      </Show>
       <EditorToolbar
         actions={actions()}
         extra={
@@ -491,15 +626,19 @@ export default function ViewerPage() {
         }
       />
       <div class="min-h-0 flex-1">
-        <Show when={dupOpen()} fallback={main()}>
+        <Show when={side()} fallback={main()}>
           <SplitPane
             initial={62}
             left={main()}
             right={
-              <DuplicatesPanel
-                onClose={() => setDupOpen(false)}
-                onNavigateOffset={(o) => tab() === 'text' && editor?.select(o, o + 1, true)}
-              />
+              <Suspense fallback={<div class="p-3 text-sm text-muted">{t('common.loading')}</div>}>
+                <Show when={side() === 'dups'} fallback={<QueryPanel onClose={() => setSide(null)} />}>
+                  <DuplicatesPanel
+                    onClose={() => setDupOpen(false)}
+                    onNavigateOffset={(o) => tab() === 'text' && editor?.select(o, o + 1, true)}
+                  />
+                </Show>
+              </Suspense>
             }
           />
         </Show>
@@ -523,8 +662,25 @@ export default function ViewerPage() {
           if (f) void loadFile(f);
         }}
       />
-      <LoadUrlDialog open={urlOpen()} onOpenChange={setUrlOpen} />
-      <ShareDialog open={shareOpen()} onOpenChange={setShareOpen} kind="single" content={doc.text} />
+      <Suspense fallback={null}>
+        <Show when={urlOpen()}>
+          <LoadUrlDialog open={urlOpen()} onOpenChange={setUrlOpen} />
+        </Show>
+        <Show when={redactOpen()}>
+          <RedactDialog open={redactOpen()} onOpenChange={setRedactOpen} />
+        </Show>
+        <Show when={bookmarksOpen()}>
+          <BookmarksDialog open={bookmarksOpen()} onOpenChange={setBookmarksOpen} />
+        </Show>
+      </Suspense>
+      <Show when={versionsOpen()}>
+        <VersionsDialog open={versionsOpen()} onOpenChange={setVersionsOpen} />
+      </Show>
+      <Suspense fallback={null}>
+        <Show when={shareOpen()}>
+          <ShareDialog open={shareOpen()} onOpenChange={setShareOpen} kind="single" content={doc.text} />
+        </Show>
+      </Suspense>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { ClipboardPaste, FileUp, History, Link2, Wand2 } from 'lucide-solid';
+import { ClipboardPaste, FileUp, History, Link2, Wand2 } from '../../lib/icons';
 import { Show, createSignal } from 'solid-js';
 import { Button } from '../ui/Button';
 import { JsonEditor } from '../editor/JsonEditor';

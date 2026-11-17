@@ -3,6 +3,7 @@ import type { RouteSectionProps } from '@solidjs/router';
 import { ErrorBoundary, Suspense, createSignal, lazy, onMount } from 'solid-js';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
+import { JobBar } from './components/ui/JobBar';
 import { ToastHost } from './components/ui/ToastHost';
 import { ConfirmHost } from './components/dialogs/ConfirmDialog';
 import { KeyboardShortcutsDialog } from './components/dialogs/KeyboardShortcutsDialog';
@@ -29,6 +30,7 @@ function Shell(props: RouteSectionProps) {
   return (
     <div class="flex h-full flex-col">
       <Header onShortcuts={() => setShortcutsOpen(true)} />
+      <JobBar />
       <main class="min-h-0 flex-1 overflow-hidden">
         <Suspense
           fallback={

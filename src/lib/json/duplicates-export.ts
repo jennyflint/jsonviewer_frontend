@@ -1,6 +1,6 @@
 import type { DuplicatesResponse } from './duplicates';
 
-function csvCell(v: unknown): string {
+export function csvCell(v: unknown): string {
   const s = typeof v === 'string' ? v : (JSON.stringify(v) ?? '');
   // neutralize spreadsheet formula injection
   const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;

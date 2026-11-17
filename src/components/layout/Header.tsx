@@ -1,6 +1,6 @@
 import { A } from '@solidjs/router';
 import { Show } from 'solid-js';
-import { Braces, Keyboard, Languages, Settings as SettingsIcon } from 'lucide-solid';
+import { Braces, Keyboard, Languages, Settings as SettingsIcon } from '../../lib/icons';
 import { createSignal } from 'solid-js';
 import { Dialog } from '../ui/Dialog';
 import { SettingsForm } from './SettingsForm';

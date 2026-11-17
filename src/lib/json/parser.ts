@@ -50,6 +50,8 @@ export interface JsonModel {
   keyEnd: Int32Array;
   /** Offsets at which each line starts. */
   lineStarts: Uint32Array;
+  /** True when the document needed JSON5 / JSONC extensions (it is not strict JSON). */
+  lenient?: boolean;
 }
 
 export type ParseResult = { ok: true; model: JsonModel } | { ok: false; error: ParseError };
@@ -106,7 +108,12 @@ function describe(text: string, i: number): string {
   return `'${ch === '\n' ? '\\n' : ch}'`;
 }
 
-export function parseJson(input: string): ParseResult {
+/**
+ * `lenient` accepts JSON5 / JSONC extensions: comments, trailing commas, single-quoted strings, unquoted keys,
+ * hex numbers, leading `+` / `.`, trailing `.`, Infinity and NaN.
+ */
+export function parseJson(input: string, opts: { lenient?: boolean } = {}): ParseResult {
+  const lenient = !!opts.lenient;
   const text = stripBom(input);
   const n = text.length;
   let cap = 1024;
@@ -184,21 +191,63 @@ export function parseJson(input: string): ParseResult {
   };
 
   const skipWs = () => {
-    while (i < n && isWs(text.charCodeAt(i))) i++;
+    for (;;) {
+      while (i < n && isWs(text.charCodeAt(i))) i++;
+      if (!lenient) return;
+      const c = text.charCodeAt(i);
+      if (c === 0x2f) {
+        const d = text.charCodeAt(i + 1);
+        if (d === 0x2f) {
+          const nl = text.indexOf('\n', i);
+          i = nl === -1 ? n : nl + 1;
+          continue;
+        }
+        if (d === 0x2a) {
+          const e = text.indexOf('*/', i + 2);
+          if (e === -1) throw new Fail(i, 'Unterminated comment');
+          i = e + 2;
+          continue;
+        }
+      }
+      if (c === 0xa0 || c === 0xfeff || c === 0x2028 || c === 0x2029 || c === 0x0b || c === 0x0c) {
+        i++;
+        continue;
+      }
+      return;
+    }
   };
 
   const scanString = (): number => {
-    // text[i] === '"'; returns the offset just past the closing quote
+    // text[i] is the opening quote; returns the offset just past the closing quote
     const s = i;
+    const q = text.charCodeAt(i);
     let j = i + 1;
     for (;;) {
       if (j >= n) throw new Fail(s, 'Unterminated string');
       const c = text.charCodeAt(j);
-      if (c === 0x22) return j + 1;
+      if (c === q) return j + 1;
       if (c < 0x20) throw new Fail(j, 'Invalid control character in string');
       if (c === 0x5c) {
         const e = text.charCodeAt(j + 1);
         if (Number.isNaN(e)) throw new Fail(s, 'Unterminated string');
+        if (lenient) {
+          if (e === 0x27 || e === 0x76 || e === 0x30) {
+            j += 2;
+            continue;
+          }
+          if (e === 0x78 && /^[0-9a-fA-F]{2}$/.test(text.slice(j + 2, j + 4))) {
+            j += 4;
+            continue;
+          }
+          if (e === 0x0a || e === 0x2028 || e === 0x2029) {
+            j += 2;
+            continue;
+          }
+          if (e === 0x0d) {
+            j += text.charCodeAt(j + 2) === 0x0a ? 3 : 2;
+            continue;
+          }
+        }
         switch (e) {
           case 0x22:
           case 0x5c:
@@ -253,6 +302,47 @@ export function parseJson(input: string): ParseResult {
     return j;
   };
 
+  const isDigit = (c: number) => c >= 0x30 && c <= 0x39;
+  const isIdStart = (c: number) =>
+    (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) || c === 0x24 || c === 0x5f || c > 0x7f;
+  const isIdPart = (c: number) => isIdStart(c) || isDigit(c);
+
+  /** JSON5 numbers: sign, hex, `.5`, `5.`, Infinity, NaN. */
+  const scanNumberLenient = (): number => {
+    const s = i;
+    let j = i;
+    const c0 = text.charCodeAt(j);
+    if (c0 === 0x2b || c0 === 0x2d) j++;
+    if (text.startsWith('Infinity', j)) return j + 8;
+    if (text.startsWith('NaN', j)) return j + 3;
+    if (text.charCodeAt(j) === 0x30 && (text.charCodeAt(j + 1) | 0x20) === 0x78) {
+      j += 2;
+      const h = j;
+      while (/[0-9a-fA-F]/.test(text[j] ?? '')) j++;
+      if (j === h) throw new Fail(s, 'Invalid hexadecimal number');
+      return j;
+    }
+    const ds = j;
+    while (isDigit(text.charCodeAt(j))) j++;
+    let digits = j - ds;
+    if (text.charCodeAt(j) === 0x2e) {
+      j++;
+      const f = j;
+      while (isDigit(text.charCodeAt(j))) j++;
+      digits += j - f;
+    }
+    if (digits === 0) throw new Fail(s, 'Invalid number');
+    const e = text.charCodeAt(j);
+    if (e === 0x65 || e === 0x45) {
+      j++;
+      const sg = text.charCodeAt(j);
+      if (sg === 0x2b || sg === 0x2d) j++;
+      if (!isDigit(text.charCodeAt(j))) throw new Fail(s, 'Invalid number: expected digits in exponent');
+      while (isDigit(text.charCodeAt(j))) j++;
+    }
+    return j;
+  };
+
   const closeContainer = () => {
     const id = stack.pop() as number;
     end[id] = i;
@@ -279,15 +369,19 @@ export function parseJson(input: string): ParseResult {
             stack.push(id);
             i++;
             state = c === 0x7b ? S_KEY_OR_END : S_VALUE_OR_END;
-          } else if (c === 0x22) {
+          } else if (c === 0x22 || (lenient && c === 0x27)) {
             const e = scanString();
             const id = addNode(T_STRING, i);
             end[id] = e;
             subtreeEnd[id] = count;
             i = e;
             state = S_AFTER;
-          } else if (c === 0x2d || (c >= 0x30 && c <= 0x39)) {
-            const e = scanNumber();
+          } else if (
+            c === 0x2d ||
+            (c >= 0x30 && c <= 0x39) ||
+            (lenient && (c === 0x2b || c === 0x2e || c === 0x49 || c === 0x4e))
+          ) {
+            const e = lenient ? scanNumberLenient() : scanNumber();
             const id = addNode(T_NUMBER, i);
             end[id] = e;
             subtreeEnd[id] = count;
@@ -334,8 +428,12 @@ export function parseJson(input: string): ParseResult {
             break;
           }
           if (c === 0x7d) throw new Fail(i, 'Trailing comma is not allowed');
-          if (c !== 0x22) throw new Fail(i, 'Expected property name in double quotes');
-          const e = scanString();
+          let e: number;
+          if (c === 0x22 || (lenient && c === 0x27)) e = scanString();
+          else if (lenient && isIdStart(c)) {
+            e = i + 1;
+            while (e < n && isIdPart(text.charCodeAt(e))) e++;
+          } else throw new Fail(i, 'Expected property name in double quotes');
           pkS = i;
           pkE = e;
           i = e;
@@ -357,6 +455,14 @@ export function parseJson(input: string): ParseResult {
           const c = text.charCodeAt(i);
           if (c === 0x2c) {
             i++;
+            if (lenient) {
+              skipWs(); // trailing commas are allowed
+              if (text.charCodeAt(i) === (isObj ? 0x7d : 0x5d)) {
+                i++;
+                closeContainer();
+                break;
+              }
+            }
             state = isObj ? S_KEY : S_VALUE;
           } else if (c === (isObj ? 0x7d : 0x5d)) {
             i++;
@@ -398,6 +504,7 @@ export function parseJson(input: string): ParseResult {
       keyStart: keyStart.slice(0, count),
       keyEnd: keyEnd.slice(0, count),
       lineStarts: computeLineStarts(text),
+      ...(lenient ? { lenient: true } : {}),
     };
     return { ok: true, model };
   }

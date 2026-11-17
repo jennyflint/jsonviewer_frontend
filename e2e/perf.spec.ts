@@ -56,7 +56,9 @@ test.describe('@perf budgets', () => {
     const ms = Date.now() - t0;
     await page.waitForTimeout(2500); // let chunked editor inserts finish
     const longest = await page.evaluate(() => Math.max(0, ...window.__long));
-    console.log(`PERF format-5MB total=${ms}ms longest-main-thread-task=${Math.round(longest)}ms`);
+    console.log(
+      `PERF format-5MB total=${ms}ms longest-main-thread-task=${Math.round(longest)}ms all=${JSON.stringify(await page.evaluate(() => window.__long.map((d) => Math.round(d))))}`,
+    );
     expect(ms).toBeLessThan(1000 + 1500); // worker < 1 s; CodeMirror document swap is measured separately above
   });
 

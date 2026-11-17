@@ -1,6 +1,6 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { MoreHorizontal } from 'lucide-solid';
+import { MoreHorizontal } from '../../lib/icons';
 import { Button } from '../ui/Button';
 import { Menu } from '../ui/Menu';
 import type { MenuEntry } from '../ui/Menu';
@@ -24,8 +24,15 @@ export interface ToolbarAction {
 /** Toolbar that collapses its secondary actions into a "More" menu on narrow screens. */
 export function EditorToolbar(props: { actions: ToolbarAction[]; extra?: JSX.Element; label?: string }) {
   const mobile = createIsMobile();
-  const visible = () => props.actions.filter((a) => !a.hidden);
-  const inline = () => (mobile() ? visible().filter((a) => a.primary) : visible());
+  // `props.actions` is a getter that rebuilds every action (and its icon): evaluate it once per change
+  const list = createMemo(() => props.actions);
+  const visible = createMemo(() => list().filter((a) => !a.hidden));
+  const inline = createMemo(() => (mobile() ? visible().filter((a) => a.primary) : visible()));
+  const ids = createMemo(() =>
+    inline()
+      .map((x) => x.id)
+      .join('\u0000'),
+  );
   const overflow = (): MenuEntry[] =>
     mobile()
       ? visible()
@@ -38,21 +45,27 @@ export function EditorToolbar(props: { actions: ToolbarAction[]; extra?: JSX.Ele
       aria-label={props.label ?? t('toolbar.label')}
       class="flex flex-wrap items-center gap-1.5 border-b border-border bg-surface px-2 py-1.5"
     >
-      <For each={inline()}>
-        {(a) => (
-          <Button
-            size="sm"
-            variant={a.active ? 'primary' : 'secondary'}
-            onClick={a.onClick}
-            disabled={a.disabled}
-            title={a.title ?? a.label}
-            aria-pressed={a.active === undefined ? undefined : a.active}
-          >
-            {a.icon}
-            <span>{a.label}</span>
-            {a.badge}
-          </Button>
-        )}
+      {/* keyed by id: the buttons keep their DOM nodes (and keyboard focus) while their state changes */}
+      <For each={ids() ? ids().split('\u0000') : []}>
+        {(id) => {
+          const a = createMemo(() => inline().find((x) => x.id === id) as ToolbarAction);
+          return (
+            <Show when={inline().some((x) => x.id === id)}>
+              <Button
+                size="sm"
+                variant={a().active ? 'primary' : 'secondary'}
+                onClick={() => a().onClick()}
+                disabled={a().disabled}
+                title={a().title ?? a().label}
+                aria-pressed={a().active === undefined ? undefined : a().active}
+              >
+                {a().icon}
+                <span>{a().label}</span>
+                {a().badge}
+              </Button>
+            </Show>
+          );
+        }}
       </For>
       <Show when={overflow().length > 0}>
         <Menu label={t('toolbar.more')} trigger={<MoreHorizontal size={16} />} items={overflow()} />

@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Download, ClipboardCopy, Share2 } from 'lucide-solid';
+import { ArrowDown, ArrowUp, Download, ClipboardCopy, Share2 } from '../../lib/icons';
 import { Show, createMemo, createSignal } from 'solid-js';
 import { Button, IconButton } from '../ui/Button';
 import { Select } from '../ui/Select';

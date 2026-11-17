@@ -13,6 +13,8 @@ export type HistoryItem = S['HistoryItem'];
 export type HistoryDetail = S['HistoryDetail'];
 export type HistoryPage = S['HistoryPage'];
 export type HistorySource = S['CreateHistoryRequest']['source'];
+export type ShareMeta = S['ShareMeta'];
+export type ShareComment = S['CommentOut'];
 export type DuplicatesRequest = S['DuplicatesRequest'];
 export type DuplicatesResponse = S['DuplicatesResponse'];
 
@@ -46,6 +48,30 @@ export const api = {
     request<ShareDetail>(`/shares/${encodeURIComponent(slug)}`, { signal }),
   deleteShare: (slug: string, deleteToken?: string) =>
     request<void>(`/shares/${encodeURIComponent(slug)}`, {
+      method: 'DELETE',
+      headers: deleteToken ? { 'X-Delete-Token': deleteToken } : undefined,
+    }),
+  shareMeta: (slug: string, signal?: AbortSignal) =>
+    request<ShareMeta>(`/shares/${encodeURIComponent(slug)}/meta`, { signal }),
+  /** Open a locked share (password / one-time link); one-time shares are destroyed by this call. */
+  openShare: (slug: string, password?: string, signal?: AbortSignal) =>
+    request<ShareDetail>(`/shares/${encodeURIComponent(slug)}/open`, {
+      method: 'POST',
+      body: { password },
+      signal,
+    }),
+  listComments: (slug: string, password?: string) =>
+    request<ShareComment[]>(`/shares/${encodeURIComponent(slug)}/comments`, {
+      headers: password ? { 'X-Share-Password': password } : undefined,
+    }),
+  addComment: (slug: string, body: { text: string; author: string; path?: string }, password?: string) =>
+    request<ShareComment>(`/shares/${encodeURIComponent(slug)}/comments`, {
+      method: 'POST',
+      body,
+      headers: password ? { 'X-Share-Password': password } : undefined,
+    }),
+  deleteComment: (slug: string, id: string, deleteToken?: string) =>
+    request<void>(`/shares/${encodeURIComponent(slug)}/comments/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: deleteToken ? { 'X-Delete-Token': deleteToken } : undefined,
     }),

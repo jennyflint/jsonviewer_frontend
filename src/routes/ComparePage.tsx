@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Eraser, GitCompare, Pencil } from 'lucide-solid';
+import { ArrowLeftRight, Eraser, GitCompare, Pencil } from '../lib/icons';
 import { Show, createSignal } from 'solid-js';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';

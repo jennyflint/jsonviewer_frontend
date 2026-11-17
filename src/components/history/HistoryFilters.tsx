@@ -1,4 +1,4 @@
-import { Search } from 'lucide-solid';
+import { Search } from '../../lib/icons';
 import { Toggle } from '../ui/Toggle';
 import { Select } from '../ui/Select';
 import { t } from '../../lib/i18n';

@@ -1,4 +1,4 @@
-import { Monitor, Moon, Sun } from 'lucide-solid';
+import { Monitor, Moon, Sun } from '../../lib/icons';
 import { Menu } from '../ui/Menu';
 import { settings, updateSettings } from '../../stores/settings';
 import { t } from '../../lib/i18n';

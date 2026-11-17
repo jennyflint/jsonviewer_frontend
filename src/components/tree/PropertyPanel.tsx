@@ -1,5 +1,5 @@
 import { createVirtualizer } from '@tanstack/solid-virtual';
-import { ArrowDown, ArrowUp } from 'lucide-solid';
+import { ArrowDown, ArrowUp } from '../../lib/icons';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { useDoc } from '../../stores/document';
 import { children, isContainer, keyOf, previewValue, typeName } from '../../lib/json/access';

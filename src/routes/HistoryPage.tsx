@@ -1,5 +1,5 @@
 import { useNavigate, useSearchParams } from '@solidjs/router';
-import { GitCompare, Trash } from 'lucide-solid';
+import { GitCompare, Trash } from '../lib/icons';
 import { createEffect, createSignal, on, onCleanup } from 'solid-js';
 import { AuthGuard } from '../components/layout/AuthGuard';
 import { Button } from '../components/ui/Button';

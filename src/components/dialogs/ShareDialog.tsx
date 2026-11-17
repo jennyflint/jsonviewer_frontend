@@ -1,12 +1,15 @@
-import { Check, Copy, Trash2 } from 'lucide-solid';
+import { Check, Copy, Trash2 } from '../../lib/icons';
 import { For, Show, createEffect, createSignal } from 'solid-js';
 import { Dialog } from '../ui/Dialog';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Toggle } from '../ui/Toggle';
 import { api } from '../../lib/api/endpoints';
+import { jsonWorker } from '../../lib/workers/clients';
+import { DEFAULT_REDACT } from '../../lib/json/redact';
 import type { ShareCreated } from '../../lib/api/endpoints';
 import { auth } from '../../stores/auth';
+import { featureOn } from '../../stores/settings';
 import { addLocalShare, localShares, removeLocalShare } from '../../stores/localShares';
 import { copyText } from '../../lib/clipboard';
 import { MAX_DOCUMENT_BYTES, PUBLIC_URL, utf8Size } from '../../lib/files';
@@ -32,6 +35,10 @@ export function ShareDialog(props: {
   const [title, setTitle] = createSignal('');
   const [expiry, setExpiry] = createSignal<Expiry>('7d');
   const [toHistory, setToHistory] = createSignal(false);
+  const [password, setPassword] = createSignal('');
+  const [burn, setBurn] = createSignal(false);
+  const [comments, setComments] = createSignal(false);
+  const [redact, setRedact] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [created, setCreated] = createSignal<(ShareCreated & { link: string }) | null>(null);
@@ -44,6 +51,10 @@ export function ShareDialog(props: {
       setError(null);
       setCopied(false);
       setTitle(props.defaultTitle ?? '');
+      setPassword('');
+      setBurn(false);
+      setComments(false);
+      setRedact(false);
       if (!authed() && expiry() === 'never') setExpiry('7d');
     }
   });
@@ -61,13 +72,27 @@ export function ShareDialog(props: {
     setBusy(true);
     setError(null);
     try {
+      let content = props.content;
+      let contentRight = props.contentRight;
+      if (featureOn('shareExtras') && redact()) {
+        const mask = async (text: string) => {
+          const r = await jsonWorker.once((w) => w.redact(text, DEFAULT_REDACT));
+          if (r.error) throw new Error(r.error);
+          return r.text;
+        };
+        content = await mask(content);
+        if (props.kind === 'compare' && contentRight !== undefined) contentRight = await mask(contentRight);
+      }
       const res = await api.createShare({
         kind: props.kind,
         title: title().trim() || undefined,
-        content: props.content,
-        content_right: props.kind === 'compare' ? props.contentRight : undefined,
+        content,
+        content_right: props.kind === 'compare' ? contentRight : undefined,
         expires_in: expiry(),
         save_to_history: authed() && toHistory(),
+        password: (featureOn('shareExtras') && password().trim()) || undefined,
+        burn_after_read: featureOn('shareExtras') && burn(),
+        comments_enabled: featureOn('shareExtras') && comments(),
       });
       const link = shareLink(res);
       setCreated({ ...res, link });
@@ -158,6 +183,27 @@ export function ShareDialog(props: {
             <Show when={authed()}>
               <Toggle checked={toHistory()} onChange={setToHistory} label={t('share.save_history')} />
             </Show>
+            <Show when={featureOn('shareExtras')}>
+              <label class="block text-sm">
+                {t('share.password')}
+                <input
+                  type="password"
+                  autocomplete="new-password"
+                  minLength={4}
+                  maxLength={128}
+                  aria-label={t('share.password')}
+                  class="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2"
+                  value={password()}
+                  onInput={(e) => setPassword(e.currentTarget.value)}
+                />
+                <span class="text-xs text-muted">{t('share.password_hint')}</span>
+              </label>
+              <div class="flex flex-col gap-2">
+                <Toggle checked={burn()} onChange={setBurn} label={t('share.burn')} />
+                <Toggle checked={comments()} onChange={setComments} label={t('share.comments')} />
+                <Toggle checked={redact()} onChange={setRedact} label={t('share.redact')} />
+              </div>
+            </Show>
             <p class="text-xs text-muted">
               {t('share.size', {
                 size: fmtSize(
@@ -178,7 +224,12 @@ export function ShareDialog(props: {
               <Button
                 type="submit"
                 variant="primary"
-                disabled={busy() || tooLarge() || props.content.trim() === ''}
+                disabled={
+                  busy() ||
+                  tooLarge() ||
+                  props.content.trim() === '' ||
+                  (password().length > 0 && password().length < 4)
+                }
               >
                 {busy() ? t('common.loading') : t('share.create')}
               </Button>

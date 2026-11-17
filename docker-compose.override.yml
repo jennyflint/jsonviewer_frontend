@@ -1,9 +1,12 @@
+# Loaded automatically by `docker compose up` (development: live code from ./src, hot reload).
+# For the production image use:  docker compose -f docker-compose.yml up -d --build
 services:
   web:
     image: node:20-alpine
     working_dir: /app
     command: sh -c "corepack enable && pnpm install --frozen-lockfile && pnpm dev --host"
     ports: !override
+      - '3000:5173' # same URL as the production image, so the OAuth callback keeps working
       - '5173:5173'
     environment:
       - VITE_API_PROXY_TARGET=http://api:8000

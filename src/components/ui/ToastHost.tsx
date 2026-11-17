@@ -1,5 +1,5 @@
 import { For } from 'solid-js';
-import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-solid';
+import { AlertTriangle, CheckCircle2, Info, X } from '../../lib/icons';
 import { dismissToast, toasts } from '../../stores/toasts';
 import { t } from '../../lib/i18n';
 

@@ -1,6 +1,6 @@
 import { useNavigate } from '@solidjs/router';
 import { For, Show, createResource } from 'solid-js';
-import { Trash2 } from 'lucide-solid';
+import { Trash2 } from '../lib/icons';
 import { AuthGuard } from '../components/layout/AuthGuard';
 import { Button } from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Spinner';

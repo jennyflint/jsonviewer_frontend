@@ -1,4 +1,4 @@
-import { Check, ExternalLink, Link2, Pencil, Pin, PinOff, Share2, Trash2, X } from 'lucide-solid';
+import { Check, ExternalLink, Link2, Pencil, Pin, PinOff, Share2, Trash2, X } from '../../lib/icons';
 import { Show, createSignal } from 'solid-js';
 import { IconButton } from '../ui/Button';
 import type { HistoryItem as Item } from '../../lib/api/endpoints';

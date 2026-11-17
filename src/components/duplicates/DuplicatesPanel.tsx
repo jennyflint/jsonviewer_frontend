@@ -1,12 +1,12 @@
-import { AlertTriangle, Download, Loader2, X } from 'lucide-solid';
+import { AlertTriangle, Download, Loader2, X } from '../../lib/icons';
 import type { JSX } from 'solid-js';
 import { For, Show, createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { IconButton, Button } from '../ui/Button';
 import { Toggle } from '../ui/Toggle';
 import { useDoc } from '../../stores/document';
-import type { DocumentStore } from '../../stores/document';
 import { jsonWorker, isStale } from '../../lib/workers/clients';
+import { runJob } from '../../stores/jobs';
 import { arrayCandidates, DEFAULT_OPTIONS } from '../../lib/json/duplicates';
 import type { DuplicateOptions, DuplicatesResponse } from '../../lib/json/duplicates';
 import { duplicatesToCsv } from '../../lib/json/duplicates-export';
@@ -18,16 +18,6 @@ import { toast } from '../../stores/toasts';
 
 type VType = 'string' | 'number' | 'boolean' | 'null';
 const TYPES: VType[] = ['string', 'number', 'boolean', 'null'];
-
-/** Duplicate-key count for the toolbar badge, computed from the parse result (no extra analysis needed). */
-export function dupKeyGroupCount(dupNodes: Set<number>, getModel: DocumentStore['getModel']): number {
-  const m = getModel();
-  if (!m || dupNodes.size === 0) return 0;
-  const seen = new Set<string>();
-  for (const id of dupNodes)
-    seen.add(`${m.parent[id]}|${m.text.slice(m.keyStart[id] as number, m.keyEnd[id] as number)}`);
-  return seen.size;
-}
 
 export function DuplicatesPanel(props: { onClose: () => void; onNavigateOffset?: (offset: number) => void }) {
   const { doc, getModel, selectNode, selectPath } = useDoc();
@@ -81,7 +71,11 @@ export function DuplicatesPanel(props: { onClose: () => void; onNavigateOffset?:
         );
         setResult(res);
       } else {
-        const r = await jsonWorker.call((w) => w.duplicates(doc.text, options));
+        const r = await runJob(
+          t('job.duplicates'),
+          () => jsonWorker.cancel(),
+          () => jsonWorker.call((w) => w.duplicates(doc.text, options)),
+        );
         if (r.ok) setResult(r.result);
         else {
           setResult(null);

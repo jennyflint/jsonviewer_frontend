@@ -1,6 +1,6 @@
 import { A, useNavigate } from '@solidjs/router';
 import { Show } from 'solid-js';
-import { History, LogIn, LogOut, User as UserIcon } from 'lucide-solid';
+import { History, LogIn, LogOut, User as UserIcon } from '../../lib/icons';
 import { Menu } from '../ui/Menu';
 import { Tooltip } from '../ui/Tooltip';
 import { For } from 'solid-js';

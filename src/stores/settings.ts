@@ -9,6 +9,33 @@ export type Lang = 'en' | 'uk';
 export type KeyType = 'string' | 'number' | 'boolean' | 'array' | 'object' | 'null';
 export const KEY_TYPES: KeyType[] = ['string', 'number', 'boolean', 'array', 'object', 'null'];
 
+/** Optional features that can be switched off in Settings (all on by default). */
+export type FeatureId =
+  | 'duplicates'
+  | 'query'
+  | 'table'
+  | 'redact'
+  | 'bookmarks'
+  | 'focusBranch'
+  | 'versions'
+  | 'tabs'
+  | 'json5'
+  | 'progress'
+  | 'shareExtras';
+export const FEATURE_IDS: FeatureId[] = [
+  'duplicates',
+  'query',
+  'table',
+  'redact',
+  'bookmarks',
+  'focusBranch',
+  'versions',
+  'tabs',
+  'json5',
+  'progress',
+  'shareExtras',
+];
+
 export interface Settings {
   theme: Theme;
   language: Lang;
@@ -20,6 +47,8 @@ export interface Settings {
   indentGuides: boolean;
   /** Custom colour of keys by the type of their value (unset = theme default). */
   keyColors: Partial<Record<KeyType, string>>;
+  /** Feature switches; a missing entry means "on". */
+  features: Partial<Record<FeatureId, boolean>>;
   /** Documents larger than this (bytes) are not parsed automatically while typing. */
   autoParseThreshold: number;
   autosaveDraft: boolean;
@@ -47,6 +76,7 @@ export const DEFAULT_SETTINGS: Settings = {
   treeHighlight: true,
   indentGuides: false,
   keyColors: {},
+  features: {},
   autoParseThreshold: 1024 * 1024,
   autosaveDraft: true,
   saveToHistory: true,
@@ -118,3 +148,6 @@ export function initSettingsEffects(): void {
     });
   });
 }
+
+/** Reactive: is this optional feature enabled? (Everything is on unless switched off in Settings.) */
+export const featureOn = (id: FeatureId): boolean => settings.features?.[id] !== false;

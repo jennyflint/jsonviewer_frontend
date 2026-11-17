@@ -1,5 +1,5 @@
 import { For, Show, createSignal } from 'solid-js';
-import { Link2 } from 'lucide-solid';
+import { Link2 } from '../../lib/icons';
 import { Dialog } from '../ui/Dialog';
 import { Button } from '../ui/Button';
 import { Spinner } from '../ui/Spinner';

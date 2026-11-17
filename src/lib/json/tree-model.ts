@@ -10,7 +10,11 @@ export class VisibleRows {
   length = 0;
   readonly expanded = new Set<number>();
 
-  constructor(private m: JsonModel) {
+  /** `root` makes the list show only that subtree ("focus on this branch"). */
+  constructor(
+    private m: JsonModel,
+    readonly root = 0,
+  ) {
     this.rebuild();
   }
 
@@ -19,8 +23,9 @@ export class VisibleRows {
     const m = this.m;
     const out: number[] = [];
     if (m.count > 0) {
-      let id = 0;
-      while (id < m.count) {
+      let id = this.root;
+      const stop = m.subtreeEnd[this.root] as number;
+      while (id < stop) {
         out.push(id);
         if (isContainer(m, id) && this.expanded.has(id) && (m.childCount[id] as number) > 0) id++;
         else id = m.subtreeEnd[id] as number;
@@ -106,7 +111,7 @@ export class VisibleRows {
   }
 
   expandAll(): void {
-    for (let id = 0; id < this.m.count; id++)
+    for (let id = this.root; id < (this.m.subtreeEnd[this.root] as number); id++)
       if (isContainer(this.m, id) && (this.m.childCount[id] as number) > 0) this.expanded.add(id);
     this.rebuild();
   }
@@ -119,8 +124,9 @@ export class VisibleRows {
   /** Expand containers with depth < level (so that nodes up to depth `level` are visible). */
   expandToLevel(level: number): void {
     this.expanded.clear();
-    for (let id = 0; id < this.m.count; id++) {
-      if (isContainer(this.m, id) && (this.m.depth[id] as number) < level) this.expanded.add(id);
+    const base = this.m.depth[this.root] as number;
+    for (let id = this.root; id < (this.m.subtreeEnd[this.root] as number); id++) {
+      if (isContainer(this.m, id) && (this.m.depth[id] as number) < base + level) this.expanded.add(id);
     }
     this.rebuild();
   }

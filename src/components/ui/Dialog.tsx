@@ -1,5 +1,5 @@
 import { Dialog as K } from '@kobalte/core/dialog';
-import { X } from 'lucide-solid';
+import { X } from '../../lib/icons';
 import type { JSX, ParentProps } from 'solid-js';
 import { t } from '../../lib/i18n';
 

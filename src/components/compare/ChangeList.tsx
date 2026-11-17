@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Minus, Pencil, Plus, Repeat } from 'lucide-solid';
+import { ArrowLeftRight, Minus, Pencil, Plus, Repeat } from '../../lib/icons';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import type { JSX } from 'solid-js';
 import type { Change, ChangeKind } from '../../lib/json/diff';

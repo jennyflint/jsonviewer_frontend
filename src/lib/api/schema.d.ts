@@ -38,6 +38,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shares/{slug}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List comments of a share */
+        get: operations["ApiSharesSlugCommentsListComments"];
+        put?: never;
+        /** Add a comment to a share */
+        post: operations["ApiSharesSlugCommentsAddComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shares": {
         parameters: {
             query?: never;
@@ -56,6 +74,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shares/{slug}/comments/{comment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a comment */
+        delete: operations["ApiSharesSlugCommentsCommentIdDeleteComment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shares/{slug}": {
         parameters: {
             query?: never;
@@ -69,6 +104,40 @@ export interface paths {
         post?: never;
         /** Delete a share */
         delete: operations["ApiSharesSlugDeleteShare"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shares/{slug}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a locked share (password / one-time link) */
+        post: operations["ApiSharesSlugOpenOpenShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shares/{slug}/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Describe a share without consuming it */
+        get: operations["ApiSharesSlugMetaShareMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -296,6 +365,21 @@ export interface components {
         ClearHistoryRequest: {
             confirm: boolean;
         };
+        /** CommentOut */
+        CommentOut: {
+            id: string;
+            path: string | null;
+            author: string;
+            text: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** CreateCommentRequest */
+        CreateCommentRequest: {
+            text: string;
+            author: string;
+            path?: string | null;
+        };
         /** CreateHistoryRequest */
         CreateHistoryRequest: {
             content: string;
@@ -321,6 +405,11 @@ export interface components {
             expires_in: "1h" | "1d" | "7d" | "30d" | "never";
             /** @default false */
             save_to_history: boolean;
+            password?: string | null;
+            /** @default false */
+            burn_after_read: boolean;
+            /** @default false */
+            comments_enabled: boolean;
         };
         /** DuplicateKey */
         DuplicateKey: {
@@ -465,6 +554,10 @@ export interface components {
         MeResponse: {
             user: components["schemas"]["UserOut"] | null;
         };
+        /** OpenShareRequest */
+        OpenShareRequest: {
+            password?: string | null;
+        };
         /** ParseErrorOut */
         ParseErrorOut: {
             message: string;
@@ -511,6 +604,12 @@ export interface components {
             expires_at: string | null;
             view_count: number;
             is_owner: boolean;
+            /** @default false */
+            comments_enabled: boolean;
+            /** @default false */
+            password_protected: boolean;
+            /** @default false */
+            burn_after_read: boolean;
         };
         /** ShareListItem */
         ShareListItem: {
@@ -524,6 +623,18 @@ export interface components {
             created_at: string;
             expires_at: string | null;
             view_count: number;
+        };
+        /** ShareMeta */
+        ShareMeta: {
+            slug: string;
+            kind: string;
+            title: string | null;
+            /** Format: date-time */
+            created_at: string;
+            expires_at: string | null;
+            password_protected: boolean;
+            burn_after_read: boolean;
+            comments_enabled: boolean;
         };
         /** SharePage */
         SharePage: {
@@ -638,6 +749,88 @@ export interface operations {
             };
         };
     };
+    ApiSharesSlugCommentsListComments: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Share-Password"?: string | null;
+            };
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Request fulfilled, document follows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentOut"][];
+                };
+            };
+            /** @description Bad request syntax or unsupported method */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status_code: number;
+                        detail: string;
+                        extra?: null | {
+                            [key: string]: unknown;
+                        } | unknown[];
+                    };
+                };
+            };
+        };
+    };
+    ApiSharesSlugCommentsAddComment: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Share-Password"?: string | null;
+            };
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCommentRequest"];
+            };
+        };
+        responses: {
+            /** @description Document created, URL follows */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentOut"];
+                };
+            };
+            /** @description Bad request syntax or unsupported method */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status_code: number;
+                        detail: string;
+                        extra?: null | {
+                            [key: string]: unknown;
+                        } | unknown[];
+                    };
+                };
+            };
+        };
+    };
     ApiSharesListShares: {
         parameters: {
             query?: {
@@ -715,6 +908,44 @@ export interface operations {
             };
         };
     };
+    ApiSharesSlugCommentsCommentIdDeleteComment: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Delete-Token"?: string | null;
+            };
+            path: {
+                slug: string;
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Request fulfilled, nothing follows */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request syntax or unsupported method */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status_code: number;
+                        detail: string;
+                        extra?: null | {
+                            [key: string]: unknown;
+                        } | unknown[];
+                    };
+                };
+            };
+        };
+    };
     ApiSharesSlugGetShare: {
         parameters: {
             query?: never;
@@ -771,6 +1002,84 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Bad request syntax or unsupported method */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status_code: number;
+                        detail: string;
+                        extra?: null | {
+                            [key: string]: unknown;
+                        } | unknown[];
+                    };
+                };
+            };
+        };
+    };
+    ApiSharesSlugOpenOpenShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenShareRequest"];
+            };
+        };
+        responses: {
+            /** @description Request fulfilled, document follows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareDetail"];
+                };
+            };
+            /** @description Bad request syntax or unsupported method */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status_code: number;
+                        detail: string;
+                        extra?: null | {
+                            [key: string]: unknown;
+                        } | unknown[];
+                    };
+                };
+            };
+        };
+    };
+    ApiSharesSlugMetaShareMeta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Request fulfilled, document follows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareMeta"];
+                };
             };
             /** @description Bad request syntax or unsupported method */
             400: {

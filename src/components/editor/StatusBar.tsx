@@ -1,5 +1,5 @@
 import { Show } from 'solid-js';
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-solid';
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw } from '../../lib/icons';
 import { useDoc } from '../../stores/document';
 import { lastSavedAt } from '../../stores/historySync';
 import { Button } from '../ui/Button';
@@ -43,6 +43,19 @@ export function StatusBar(props: { cursor: Cursor; onGoToError?: (offset: number
         <span class="inline-flex items-center gap-1 text-ok">
           <CheckCircle2 size={13} /> {t('status.valid')}
         </span>
+        <Show when={doc.lenient}>
+          <span
+            class="rounded bg-warn-soft px-1.5 text-warn"
+            title={
+              doc.strictError
+                ? `${t('lenient.not_strict')}: ${doc.strictError.message}`
+                : t('lenient.not_strict')
+            }
+            data-testid="lenient-badge"
+          >
+            {t('lenient.badge')}
+          </span>
+        </Show>
       </Show>
       <Show when={doc.status === 'error' && doc.error}>
         {(e) => (

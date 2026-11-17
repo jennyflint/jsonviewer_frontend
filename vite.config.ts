@@ -5,9 +5,27 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  const alias = {
+    '~': fileURLToPath(new URL('./src', import.meta.url)),
+    // see src/lib/icons.ts
+    'lucide-icons': fileURLToPath(new URL('./node_modules/lucide-solid/dist/esm/icons', import.meta.url)),
+  };
   return {
     plugins: [solid(), tailwind()],
-    resolve: { alias: { '~': fileURLToPath(new URL('./src', import.meta.url)) } },
+    resolve: { alias },
+    optimizeDeps: {
+      // everything that is imported lazily would otherwise be discovered late and trigger a full reload
+      include: [
+        '@kobalte/core/dialog',
+        '@kobalte/core/dropdown-menu',
+        '@kobalte/core/context-menu',
+        '@codemirror/merge',
+        'jsonpath-plus',
+        'jmespath',
+        'diff',
+        'comlink',
+      ],
+    },
     worker: { format: 'es' as const },
     server: {
       port: 5173,
@@ -41,7 +59,7 @@ export default defineConfig(({ mode }) => {
       ? {
           resolve: {
             conditions: ['development', 'browser'],
-            alias: { '~': fileURLToPath(new URL('./src', import.meta.url)) },
+            alias,
           },
         }
       : {}),

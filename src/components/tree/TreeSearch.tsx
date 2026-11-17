@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, CaseSensitive, Filter, Regex, Search } from 'lucide-solid';
+import { ArrowDown, ArrowUp, CaseSensitive, Filter, Regex, Search } from '../../lib/icons';
 import { Show, createEffect, createSignal, on, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { IconButton } from '../ui/Button';

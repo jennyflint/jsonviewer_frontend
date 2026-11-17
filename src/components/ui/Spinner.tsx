@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-solid';
+import { Loader2 } from '../../lib/icons';
 import { t } from '../../lib/i18n';
 
 export function Spinner(props: { size?: number; label?: string }) {

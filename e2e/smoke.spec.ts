@@ -44,6 +44,43 @@ test.describe('@smoke real stack', () => {
     await expect(dlg.getByRole('alert')).toContainText(/not allowed|valid/i);
   });
 
+  test('@smoke password, one-time link and comments against the real backend', async ({ request }) => {
+    const mk = async (extra: Record<string, unknown>) => {
+      const r = await request.post('/api/shares', {
+        data: { content: '{"smoke":1}', expires_in: '1h', ...extra },
+      });
+      expect(r.status()).toBe(201);
+      return (await r.json()) as { slug: string; delete_token: string };
+    };
+    // password
+    const p = await mk({ password: 'correct-horse' });
+    expect((await request.get(`/api/shares/${p.slug}`)).status()).toBe(403);
+    expect(
+      (await request.post(`/api/shares/${p.slug}/open`, { data: { password: 'wrong-horse' } })).status(),
+    ).toBe(403);
+    const ok = await request.post(`/api/shares/${p.slug}/open`, { data: { password: 'correct-horse' } });
+    expect(ok.status()).toBe(200);
+    expect((await ok.json()).content).toBe('{"smoke":1}');
+    // one-time link: meta does not burn it, the first open does
+    const b = await mk({ burn_after_read: true });
+    expect((await request.get(`/api/shares/${b.slug}/meta`)).ok()).toBeTruthy();
+    expect((await request.post(`/api/shares/${b.slug}/open`, { data: {} })).status()).toBe(200);
+    expect((await request.post(`/api/shares/${b.slug}/open`, { data: {} })).status()).toBe(404);
+    // comments
+    const c = await mk({ comments_enabled: true });
+    const posted = await request.post(`/api/shares/${c.slug}/comments`, {
+      data: { text: 'hi', author: 'smoke', path: '$.smoke' },
+    });
+    expect(posted.status()).toBe(201);
+    expect(((await (await request.get(`/api/shares/${c.slug}/comments`)).json()) as unknown[]).length).toBe(
+      1,
+    );
+    const del = await request.delete(`/api/shares/${c.slug}/comments/${(await posted.json()).id}`, {
+      headers: { 'X-Delete-Token': c.delete_token },
+    });
+    expect(del.status()).toBe(204);
+  });
+
   test('@smoke duplicates: client result matches the backend', async ({ request }) => {
     const content = readFileSync(resolve('src/test/fixtures/dups.json'), 'utf8');
     const res = await request.post('/api/analysis/duplicates', { data: { content, options: {} } });

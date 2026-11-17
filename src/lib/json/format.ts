@@ -1,5 +1,5 @@
 /** Formatting straight from the parsed model: raw number lexemes and duplicate keys are preserved. */
-import { children, rawKey, keyOf, raw } from './access';
+import { children, rawKey, keyOf, raw, strictKey, strictRaw } from './access';
 import { compareCodePoints } from './canonical';
 import { T_ARRAY, T_OBJECT } from './parser';
 import type { JsonModel } from './parser';
@@ -14,6 +14,8 @@ interface Opts {
   recursive: boolean;
   /** Optional re-ordering of children (used to normalize arrays before diffing). */
   order?: ChildOrder;
+  /** Rewrite JSON5 / JSONC tokens as strict JSON (quoted keys, double-quoted strings, plain numbers). */
+  strict?: boolean;
   /** Receives the 1-based line on which each node starts (pretty output only). */
   lines?: Int32Array;
 }
@@ -49,7 +51,7 @@ function serialize(m: JsonModel, o: Opts, root = 0): string {
       stack.push({ ids: members(id, level), idx: 0, closer: t === T_OBJECT ? '}' : ']', level });
     } else if (t === T_OBJECT) out.push('{}');
     else if (t === T_ARRAY) out.push('[]');
-    else out.push(raw(m, id));
+    else out.push(o.strict ? strictRaw(m, id) : raw(m, id));
   };
 
   if (m.count === 0) return '';
@@ -69,7 +71,7 @@ function serialize(m: JsonModel, o: Opts, root = 0): string {
       if (nl) line++;
       (o.lines as Int32Array)[id] = line;
     }
-    const k = rawKey(m, id);
+    const k = o.strict ? strictKey(m, id) : rawKey(m, id);
     if (k !== null) out.push(k, colon);
     emitValue(id, f.level + 1);
   }
@@ -107,4 +109,9 @@ export function normalize(
 /** Pretty-print a single subtree (used by "Copy subtree as JSON"). */
 export function prettyNode(m: JsonModel, id: number, indent: Indent = 2): string {
   return serialize(m, { indent, sort: false, recursive: true }, id);
+}
+
+/** Strict JSON text of a (possibly JSON5 / JSONC) document: comments are dropped, tokens normalized. */
+export function toStrictJson(m: JsonModel, indent: Indent | null = 2): string {
+  return serialize(m, { indent, sort: false, recursive: true, strict: true });
 }

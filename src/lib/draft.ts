@@ -6,9 +6,9 @@ import { getItem, removeItem, setItem } from './storage';
 
 export const MAX_DRAFT_CHARS = 15 * 1024 * 1024;
 const LS_KEY = 'jv.draft.v1';
+const lsKey = (id: string) => (id === 'main' ? LS_KEY : `${LS_KEY}.${id}`);
 const DB = 'jsonviewer';
 const STORE = 'drafts';
-const KEY = 'main';
 
 function open(): Promise<IDBDatabase> | null {
   try {
@@ -58,25 +58,46 @@ export const hasIndexedDb = (): boolean => {
 };
 
 /** Returns false when the draft could not be stored. */
-export async function saveDraft(text: string): Promise<boolean> {
+export async function saveDraft(text: string, id = 'main'): Promise<boolean> {
   if (text.length > MAX_DRAFT_CHARS) return false;
   if (hasIndexedDb()) {
-    await idb('readwrite', (s) => s.put(text, KEY));
-    removeItem(LS_KEY); // migrate away from the legacy copy
+    await idb('readwrite', (s) => s.put(text, id));
+    removeItem(lsKey(id)); // migrate away from the legacy copy
     return true;
   }
-  return setItem(LS_KEY, text);
+  return setItem(lsKey(id), text);
 }
 
-export async function loadDraft(): Promise<string | null> {
+export async function loadDraft(id = 'main'): Promise<string | null> {
   if (hasIndexedDb()) {
-    const v = await idb<string>('readonly', (s) => s.get(KEY) as IDBRequest<string>);
+    const v = await idb<string>('readonly', (s) => s.get(id) as IDBRequest<string>);
     if (typeof v === 'string') return v;
   }
-  return getItem(LS_KEY);
+  return getItem(lsKey(id));
 }
 
-export async function removeDraft(): Promise<void> {
-  removeItem(LS_KEY);
-  if (hasIndexedDb()) await idb('readwrite', (s) => s.delete(KEY));
+export async function removeDraft(id = 'main'): Promise<void> {
+  removeItem(lsKey(id));
+  if (hasIndexedDb()) await idb('readwrite', (s) => s.delete(id));
+}
+
+// ---- small key/value helpers (snapshots, tab data) in the same IndexedDB store; memory fallback without IDB
+const memory = new Map<string, unknown>();
+
+export async function kvGet<T>(key: string): Promise<T | undefined> {
+  if (!hasIndexedDb()) return memory.get(key) as T | undefined;
+  return idb<T>('readonly', (s) => s.get(key) as IDBRequest<T>);
+}
+
+export async function kvSet(key: string, value: unknown): Promise<void> {
+  if (!hasIndexedDb()) {
+    memory.set(key, value);
+    return;
+  }
+  await idb('readwrite', (s) => s.put(value, key));
+}
+
+export async function kvDelete(key: string): Promise<void> {
+  memory.delete(key);
+  if (hasIndexedDb()) await idb('readwrite', (s) => s.delete(key));
 }

@@ -1,7 +1,8 @@
 import { For } from 'solid-js';
 import { Select } from '../ui/Select';
 import { Toggle } from '../ui/Toggle';
-import { KEY_TYPES, settings, updateSettings } from '../../stores/settings';
+import { FEATURE_IDS, KEY_TYPES, featureOn, settings, updateSettings } from '../../stores/settings';
+import { Tooltip } from '../ui/Tooltip';
 import type { KeyType } from '../../stores/settings';
 import { t } from '../../lib/i18n';
 import type { Indent } from '../../lib/json/format';
@@ -176,6 +177,44 @@ export function SettingsForm() {
           onClick={() => updateSettings({ keyColors: {} })}
         >
           {t('settings.key_reset_all')}
+        </button>
+      </fieldset>
+      <fieldset class="rounded-md border border-border p-3 sm:col-span-2" data-testid="feature-switches">
+        <legend class="px-1 text-sm font-medium">{t('settings.features')}</legend>
+        <p class="mb-2 text-xs text-muted">{t('settings.features_hint')}</p>
+        <div class="grid gap-x-4 gap-y-1.5 sm:grid-cols-2 pb-8">
+          <For each={FEATURE_IDS}>
+            {(id) => (
+              <div class="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  id={`feature-${id}`}
+                  class="h-4 w-4 accent-[var(--accent)]"
+                  checked={featureOn(id)}
+                  onChange={(e) =>
+                    updateSettings({ features: { ...settings.features, [id]: e.currentTarget.checked } })
+                  }
+                />
+                <Tooltip content={t(`feature.${id}.desc` as const)} align="left">
+                  <label
+                    for={`feature-${id}`}
+                    tabindex="0"
+                    class="cursor-pointer underline decoration-dotted underline-offset-2"
+                  >
+                    {t(`feature.${id}` as const)}
+                  </label>
+                </Tooltip>
+              </div>
+            )}
+          </For>
+        </div>
+        <button
+          type="button"
+          class="mt-2 text-xs text-accent underline"
+          onClick={() => updateSettings({ features: {} })}
+        >
+          {t('settings.features_reset')}
         </button>
       </fieldset>
     </div>

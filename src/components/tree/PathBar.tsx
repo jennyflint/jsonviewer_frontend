@@ -1,4 +1,4 @@
-import { Copy } from 'lucide-solid';
+import { Copy } from '../../lib/icons';
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { useDoc } from '../../stores/document';
 import { IconButton } from '../ui/Button';

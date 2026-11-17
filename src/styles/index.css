@@ -412,3 +412,16 @@ mark.hit.active {
 .cm-k-null * {
   color: var(--k-null) !important;
 }
+
+/* indeterminate progress bar */
+.job-indeterminate {
+  animation: job-slide 1.2s infinite ease-in-out;
+}
+@keyframes job-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}

@@ -46,8 +46,8 @@ test('tree keyboard navigation follows the ARIA tree pattern', async ({ page }) 
 
 test('invalid JSON shows the error location and disables formatting', async ({ page }) => {
   await page.goto('/');
-  await setEditor(page, '{"a":1,}');
-  await expect(page.getByRole('status').getByText(/Trailing comma is not allowed/)).toBeVisible();
+  await setEditor(page, '{"a":1 "b":2}');
+  await expect(page.getByRole('status').getByText(/Expected ',' or '}'/)).toBeVisible();
   await page.getByRole('button', { name: 'Format', exact: true }).click();
   await expect(page.getByText('Cannot process invalid JSON')).toBeVisible();
 });

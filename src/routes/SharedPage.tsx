@@ -1,5 +1,18 @@
-import { A, useNavigate, useParams } from '@solidjs/router';
-import { Copy, Download, ExternalLink, GitCompare, ListTree, Trash2, Type, CopyCheck } from 'lucide-solid';
+import { A, useNavigate, useParams, useSearchParams } from '@solidjs/router';
+import {
+  Copy,
+  Download,
+  ExternalLink,
+  GitCompare,
+  ListTree,
+  Trash2,
+  Type,
+  CopyCheck,
+  Link2,
+  MessageSquare,
+  Lock,
+  Flame,
+} from '../lib/icons';
 import { Match, Show, Switch, createEffect, createMemo, createResource, createSignal, on } from 'solid-js';
 import { Button } from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Spinner';
@@ -16,7 +29,9 @@ import { TreeSearch, createTreeSearch } from '../components/tree/TreeSearch';
 import { DuplicatesPanel } from '../components/duplicates/DuplicatesPanel';
 import { CompareResultView } from '../components/compare/CompareResultView';
 import { api } from '../lib/api/endpoints';
-import type { ShareDetail } from '../lib/api/endpoints';
+import type { ShareDetail, ShareMeta } from '../lib/api/endpoints';
+import { CommentsPanel } from '../components/dialogs/CommentsPanel';
+import { buildPath } from '../lib/json/path';
 import { isApiError } from '../lib/api/client';
 import {
   DocContext,
@@ -49,12 +64,34 @@ function NotFound() {
   );
 }
 
-function SingleView(props: { share: ShareDetail }) {
+function SingleView(props: {
+  share: ShareDetail;
+  password?: string;
+  canModerate: boolean;
+  deleteToken?: string;
+}) {
   // isolated document: never touches the user's own draft
   const store = createDocument({ initialText: props.share.content, persist: false });
-  void store.parseNow();
+  // a link to a node (?path=$.users[3]): select it once the document is parsed
+  void store.parseNow().then(() => {
+    const raw = params.path;
+    const p = Array.isArray(raw) ? raw[0] : raw;
+    if (p && store.selectPath(p)) setTab('viewer');
+  });
+  const selectedPath = () => {
+    const m = store.getModel();
+    return m && store.doc.selectedNodeId >= 0 ? buildPath(m, store.doc.selectedNodeId) : undefined;
+  };
+  const copyNodeLink = async () => {
+    const p = selectedPath();
+    if (!p) return;
+    const url = `${location.origin}/s/${props.share.slug}?path=${encodeURIComponent(p)}`;
+    toast.success((await copyText(url)) ? t('shared.node_link_copied') : t('copy.failed'));
+  };
   const [tab, setTab] = createSignal<'text' | 'viewer'>('text');
-  const [dupOpen, setDupOpen] = createSignal(false);
+  const [side, setSide] = createSignal<'dups' | 'comments' | null>(null);
+  const dupOpen = () => side() === 'dups';
+  const [params] = useSearchParams();
   const [cursor, setCursor] = createSignal<Cursor>({ line: 1, column: 1, offset: 0 });
   const [search, setSearch] = createTreeSearch();
   let editor: EditorApi | undefined;
@@ -99,19 +136,53 @@ function SingleView(props: { share: ShareDetail }) {
           <Button
             size="sm"
             variant={dupOpen() ? 'primary' : 'secondary'}
-            onClick={() => setDupOpen((o) => !o)}
+            onClick={() => setSide((s) => (s === 'dups' ? null : 'dups'))}
           >
             <CopyCheck size={14} /> {t('toolbar.duplicates')}
           </Button>
+          <Button
+            size="sm"
+            disabled={!selectedPath()}
+            onClick={() => void copyNodeLink()}
+            title={t('shared.copy_node_link')}
+          >
+            <Link2 size={14} /> {t('share.link_node')}
+          </Button>
+          <Show when={props.share.comments_enabled}>
+            <Button
+              size="sm"
+              variant={side() === 'comments' ? 'primary' : 'secondary'}
+              onClick={() => setSide((s) => (s === 'comments' ? null : 'comments'))}
+            >
+              <MessageSquare size={14} /> {t('comments.title')}
+            </Button>
+          </Show>
         </div>
         <div class="min-h-0 flex-1">
           <SplitPaneMaybe
-            open={dupOpen()}
+            open={side() !== null}
             side={
-              <DuplicatesPanel
-                onClose={() => setDupOpen(false)}
-                onNavigateOffset={(o) => tab() === 'text' && editor?.select(o, o + 1, true)}
-              />
+              <Show
+                when={side() === 'dups'}
+                fallback={
+                  <CommentsPanel
+                    slug={props.share.slug}
+                    password={props.password}
+                    canModerate={props.canModerate}
+                    deleteToken={props.deleteToken}
+                    selectedPath={selectedPath()}
+                    onJump={(p) => {
+                      if (store.selectPath(p)) setTab('viewer');
+                    }}
+                    onClose={() => setSide(null)}
+                  />
+                }
+              >
+                <DuplicatesPanel
+                  onClose={() => setSide(null)}
+                  onNavigateOffset={(o) => tab() === 'text' && editor?.select(o, o + 1, true)}
+                />
+              </Show>
             }
           >
             <div class="flex h-full min-h-0 flex-col">
@@ -176,7 +247,13 @@ function SplitPaneMaybe(props: {
   );
 }
 
-function CompareView(props: { share: ShareDetail }) {
+function CompareView(props: {
+  share: ShareDetail;
+  password?: string;
+  canModerate: boolean;
+  deleteToken?: string;
+}) {
+  const [commentsOpen, setCommentsOpen] = createSignal(false);
   const [result, setResult] = createSignal<CompareResult | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const navigate = useNavigate();
@@ -217,32 +294,119 @@ function CompareView(props: { share: ShareDetail }) {
         >
           <GitCompare size={14} /> {t('shared.open_in_compare')}
         </Button>
+        <Show when={props.share.comments_enabled}>
+          <Button
+            size="sm"
+            variant={commentsOpen() ? 'primary' : 'secondary'}
+            onClick={() => setCommentsOpen((o) => !o)}
+          >
+            <MessageSquare size={14} /> {t('comments.title')}
+          </Button>
+        </Show>
       </div>
       <div class="min-h-0 flex-1">
+        <SplitPaneMaybe
+          open={commentsOpen()}
+          side={
+            <CommentsPanel
+              slug={props.share.slug}
+              password={props.password}
+              canModerate={props.canModerate}
+              deleteToken={props.deleteToken}
+              onClose={() => setCommentsOpen(false)}
+            />
+          }
+        >
+          <Show when={error()}>
+            <p class="p-4 text-danger" role="alert">
+              {error()}
+            </p>
+          </Show>
+          <Show
+            when={result()}
+            fallback={
+              <div class="space-y-2 p-4">
+                <Skeleton class="h-6 w-1/2" />
+                <Skeleton class="h-48 w-full" />
+              </div>
+            }
+          >
+            {(r) => (
+              <CompareResultView
+                result={r()}
+                left={props.share.content}
+                right={props.share.content_right ?? ''}
+                navKeys
+              />
+            )}
+          </Show>
+        </SplitPaneMaybe>
+      </div>
+    </div>
+  );
+}
+
+/** Password prompt and/or one-time-link confirmation shown before a locked share is opened. */
+function LockedGate(props: { meta: ShareMeta; onOpen: (d: ShareDetail, password?: string) => void }) {
+  const [pw, setPw] = createSignal('');
+  const [busy, setBusy] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
+  const open = async (e?: Event) => {
+    e?.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const password = props.meta.password_protected ? pw() : undefined;
+      props.onOpen(await api.openShare(props.meta.slug, password), password);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div
+      class="mx-auto mt-10 max-w-sm rounded-xl border border-border bg-surface p-6 shadow-sm"
+      data-testid="share-gate"
+    >
+      <h1 class="flex items-center gap-2 text-lg font-semibold">
+        {props.meta.password_protected ? <Lock size={18} /> : <Flame size={18} class="text-danger" />}
+        {props.meta.password_protected ? t('shared.locked_title') : t('shared.burn_title')}
+      </h1>
+      <Show when={props.meta.title}>
+        <p class="mt-1 text-sm text-muted">{props.meta.title}</p>
+      </Show>
+      <form class="mt-4 space-y-3" onSubmit={open}>
+        <Show when={props.meta.password_protected}>
+          <label class="block text-sm">
+            {t('shared.password_label')}
+            <input
+              type="password"
+              autofocus
+              autocomplete="off"
+              aria-label={t('shared.password_label')}
+              class="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2"
+              value={pw()}
+              onInput={(e) => setPw(e.currentTarget.value)}
+            />
+          </label>
+        </Show>
+        <Show when={props.meta.burn_after_read}>
+          <p class="rounded-md bg-warn-soft p-2 text-sm text-warn">{t('shared.burn_text')}</p>
+        </Show>
         <Show when={error()}>
-          <p class="p-4 text-danger" role="alert">
+          <p class="rounded-md bg-danger-soft p-2 text-sm text-danger" role="alert">
             {error()}
           </p>
         </Show>
-        <Show
-          when={result()}
-          fallback={
-            <div class="space-y-2 p-4">
-              <Skeleton class="h-6 w-1/2" />
-              <Skeleton class="h-48 w-full" />
-            </div>
-          }
+        <Button
+          type="submit"
+          variant={props.meta.burn_after_read ? 'danger' : 'primary'}
+          disabled={busy() || (props.meta.password_protected && !pw())}
         >
-          {(r) => (
-            <CompareResultView
-              result={r()}
-              left={props.share.content}
-              right={props.share.content_right ?? ''}
-              navKeys
-            />
-          )}
-        </Show>
-      </div>
+          {props.meta.burn_after_read ? t('shared.burn_open') : t('shared.open')}
+        </Button>
+      </form>
     </div>
   );
 }
@@ -250,21 +414,46 @@ function CompareView(props: { share: ShareDetail }) {
 export default function SharedPage() {
   const params = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const [share, { refetch }] = createResource(
+  type Loaded = { share: ShareDetail } | { locked: ShareMeta };
+  const [loaded, { refetch }] = createResource<Loaded, string>(
     () => params.slug,
-    (slug) => api.getShare(slug),
+    async (slug) => {
+      // describing a share never consumes it, so link previews cannot burn a one-time link
+      const meta = await api.shareMeta(slug);
+      if (meta.password_protected || meta.burn_after_read) return { locked: meta };
+      return { share: await api.getShare(slug) };
+    },
   );
+  const [opened, setOpened] = createSignal<{ share: ShareDetail; password?: string } | null>(null);
+  createEffect(
+    on(
+      () => params.slug,
+      () => setOpened(null),
+    ),
+  );
+  const share = loaded; // resource state (loading / error)
   const notFound = () => {
-    const e = share.error;
+    const e = loaded.error;
     return isApiError(e) && (e.status === 404 || e.code === 'share_not_found' || e.code === 'not_found');
   };
-  // reading a failed resource throws, so always go through `data()`
-  const data = () => (share.error ? undefined : share());
+  // reading a failed resource throws, so always go through these accessors
+  const result = () => (loaded.error ? undefined : loaded());
+  const data = (): ShareDetail | undefined => {
+    const o = opened();
+    if (o) return o.share;
+    const r = result();
+    return r && 'share' in r ? r.share : undefined;
+  };
+  const lockedMeta = () => {
+    const r = result();
+    return !opened() && r && 'locked' in r ? r.locked : undefined;
+  };
+  const password = () => opened()?.password;
   const token = createMemo(() => {
     const d = data();
     return d ? deleteTokenFor(d.slug) : undefined;
   });
-  const canDelete = () => !!data() && (data()!.is_owner || !!token());
+  const canDelete = () => !!data() && !data()!.burn_after_read && (data()!.is_owner || !!token());
 
   const remove = async () => {
     const s = data();
@@ -300,15 +489,18 @@ export default function SharedPage() {
       <Match when={notFound()}>
         <NotFound />
       </Match>
-      <Match when={share.error}>
+      <Match when={loaded.error}>
         <div class="mx-auto max-w-md p-10 text-center">
           <p class="text-danger" role="alert">
-            {errorMessage(share.error)}
+            {errorMessage(loaded.error)}
           </p>
           <Button class="mt-3" onClick={() => void refetch()}>
             {t('common.retry')}
           </Button>
         </div>
+      </Match>
+      <Match when={lockedMeta()}>
+        {(meta) => <LockedGate meta={meta()} onOpen={(d, pw) => setOpened({ share: d, password: pw })} />}
       </Match>
       <Match when={data()}>
         {(s) => (
@@ -323,6 +515,16 @@ export default function SharedPage() {
                   : t('share.never_expires')}
               </span>
               <span class="text-xs text-muted">{t('shared.views', { n: fmtNumber(s().view_count) })}</span>
+              <Show when={s().password_protected}>
+                <span class="inline-flex items-center gap-1 rounded bg-surface px-2 py-0.5 text-xs text-muted">
+                  <Lock size={11} /> {t('share.protected')}
+                </span>
+              </Show>
+              <Show when={s().burn_after_read}>
+                <span class="inline-flex items-center gap-1 rounded bg-warn-soft px-2 py-0.5 text-xs text-warn">
+                  <Flame size={11} /> {t('share.burn_badge')}
+                </span>
+              </Show>
               <Show when={canDelete()}>
                 <Button size="sm" variant="danger" class="ml-auto" onClick={() => void remove()}>
                   <Trash2 size={14} /> {t('shared.delete')}
@@ -330,8 +532,32 @@ export default function SharedPage() {
               </Show>
             </header>
             <div class="min-h-0 flex-1">
-              <Show when={s().kind === 'compare'} fallback={<SingleView share={s()} />}>
-                <CompareView share={s()} />
+              <Show when={s().burn_after_read}>
+                <p
+                  class="border-b border-border bg-warn-soft px-3 py-1.5 text-sm text-warn"
+                  role="status"
+                  data-testid="burn-banner"
+                >
+                  {t('shared.burned')}
+                </p>
+              </Show>
+              <Show
+                when={s().kind === 'compare'}
+                fallback={
+                  <SingleView
+                    share={s()}
+                    password={password()}
+                    canModerate={s().is_owner || !!token()}
+                    deleteToken={token()}
+                  />
+                }
+              >
+                <CompareView
+                  share={s()}
+                  password={password()}
+                  canModerate={s().is_owner || !!token()}
+                  deleteToken={token()}
+                />
               </Show>
             </div>
           </div>

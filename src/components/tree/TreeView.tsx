@@ -1,17 +1,18 @@
 import { createVirtualizer } from '@tanstack/solid-virtual';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { AlertTriangle, ChevronDown, ChevronRight, Copy } from 'lucide-solid';
+import { AlertTriangle, ChevronDown, ChevronRight, Copy, Star } from '../../lib/icons';
 import { For, Show, createEffect, createMemo, createSignal, on } from 'solid-js';
 import { useDoc } from '../../stores/document';
 import type { DocumentStore } from '../../stores/document';
 import { VisibleRows } from '../../lib/json/tree-model';
 import { isContainer, keyOf, typeName, previewValue, raw, stringValue } from '../../lib/json/access';
 import { prettyNode } from '../../lib/json/format';
-import { buildPath } from '../../lib/json/path';
+import { buildPath, resolvePath } from '../../lib/json/path';
+import { bookmarksOf, toggleBookmark } from '../../stores/bookmarks';
 import { T_ARRAY, T_STRING } from '../../lib/json/parser';
 import { copyText } from '../../lib/clipboard';
 import { toast } from '../../stores/toasts';
-import { settings } from '../../stores/settings';
+import { featureOn, settings } from '../../stores/settings';
 import { highlightText } from './highlight';
 import { typeColor, typeIcon } from './typeIcon';
 import { t } from '../../lib/i18n';
@@ -32,7 +33,20 @@ export const EXPAND_ALL_GUARD = 50_000;
 const ROW_HEIGHT = 24;
 
 export function TreeView(props: { search?: TreeSearchState; active?: boolean }) {
-  const { doc, getDupNodes, getModel, getRows, selectNode, touchRows } = useDoc();
+  const { doc, getDupNodes, getModel, getRows, selectNode, touchRows, getFocus, setFocus, tabId } = useDoc();
+  /** Depth of the focused branch root: rows are indented relative to it. */
+  const baseDepth = () => {
+    const f = getFocus();
+    const m = getModel();
+    return f >= 0 && m ? (m.depth[f] as number) : 0;
+  };
+  /** Node ids of the bookmarked paths (recomputed when bookmarks or the document change). */
+  const bookmarkIds = createMemo(() => {
+    const m = getModel();
+    const ids = new Set<number>();
+    if (m) for (const b of bookmarksOf(tabId)) ids.add(resolvePath(m, b.path));
+    return ids;
+  });
   let scroller!: HTMLDivElement;
   const model = () => getModel();
   const matchSet = createMemo(() => new Set(props.search?.matches ?? []));
@@ -279,6 +293,9 @@ export function TreeView(props: { search?: TreeSearchState; active?: boolean }) 
                           open={isOpen(id())}
                           dup={getDupNodes().has(id())}
                           matched={matchSet().has(id())}
+                          baseDepth={baseDepth()}
+                          bookmarked={bookmarkIds().has(id())}
+                          onBookmark={() => toggleBookmark(tabId, buildPath(m(), id()))}
                           isActiveMatch={activeMatchId() === id()}
                           search={props.search}
                           setSize={rowIds().length}
@@ -324,6 +341,27 @@ export function TreeView(props: { search?: TreeSearchState; active?: boolean }) 
             {t('tree.copy_subtree')}
           </ContextMenu.Item>
           <ContextMenu.Separator class="menu-sep" />
+          <Show when={featureOn('focusBranch')}>
+            <ContextMenu.Item
+              class="menu-item"
+              disabled={ctxNode() < 0 || !model() || !isContainer(model()!, ctxNode())}
+              onSelect={() => setFocus(ctxNode())}
+            >
+              {t('tree.focus_branch')}
+            </ContextMenu.Item>
+          </Show>
+          <Show when={featureOn('bookmarks')}>
+            <ContextMenu.Item
+              class="menu-item"
+              onSelect={() => {
+                const m = model();
+                if (m && ctxNode() >= 0) toggleBookmark(tabId, buildPath(m, ctxNode()));
+              }}
+            >
+              {t('bookmarks.toggle')}
+            </ContextMenu.Item>
+          </Show>
+          <ContextMenu.Separator class="menu-sep" />
           <ContextMenu.Item class="menu-item" onSelect={() => act.recursive(true)}>
             {t('tree.expand_recursive')}
           </ContextMenu.Item>
@@ -351,6 +389,9 @@ function TreeRow(props: {
   onToggle: () => void;
   onSelect: () => void;
   onCopyPath: () => void;
+  baseDepth: number;
+  bookmarked: boolean;
+  onBookmark: () => void;
 }) {
   const m = () => props.model;
   const container = () => isContainer(m(), props.id) && (m().childCount[props.id] as number) > 0;
@@ -378,7 +419,7 @@ function TreeRow(props: {
       id={`tn-${props.id}`}
       data-node={props.id}
       role="treeitem"
-      aria-level={(m().depth[props.id] as number) + 1}
+      aria-level={(m().depth[props.id] as number) - props.baseDepth + 1}
       aria-expanded={container() ? props.open : undefined}
       aria-selected={props.selected}
       aria-setsize={props.setSize}
@@ -387,7 +428,7 @@ function TreeRow(props: {
       style={{
         height: `${ROW_HEIGHT}px`,
         transform: `translateY(${props.y}px)`,
-        'padding-left': `${(m().depth[props.id] as number) * 16 + 4}px`,
+        'padding-left': `${((m().depth[props.id] as number) - props.baseDepth) * 16 + 4}px`,
       }}
       onClick={() => props.onSelect()}
       onDblClick={() => container() && props.onToggle()}
@@ -428,6 +469,25 @@ function TreeRow(props: {
       <span style={{ color: typeColor(type()) }} class="overflow-hidden text-ellipsis">
         {hl(preview(), false)}
       </span>
+      <Show when={featureOn('bookmarks')}>
+        <button
+          tabindex="-1"
+          class="ml-2 rounded p-0.5 hover:bg-surface-2"
+          classList={{
+            'inline-flex text-warn': props.bookmarked,
+            'hidden text-muted hover:text-fg group-hover:inline-flex': !props.bookmarked,
+          }}
+          aria-label={props.bookmarked ? t('bookmarks.remove') : t('bookmarks.add')}
+          aria-pressed={props.bookmarked}
+          title={props.bookmarked ? t('bookmarks.remove') : t('bookmarks.add')}
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onBookmark();
+          }}
+        >
+          <Star size={12} fill={props.bookmarked ? 'currentColor' : 'none'} />
+        </button>
+      </Show>
       <button
         tabindex="-1"
         class="ml-2 hidden rounded p-0.5 text-muted hover:bg-surface-2 hover:text-fg group-hover:inline-flex"

@@ -16,13 +16,88 @@ export function raw(m: JsonModel, id: number): string {
 }
 
 /** Decode a JSON string token (including quotes). */
-export function decodeToken(tok: string): string {
-  if (tok.indexOf('\\') === -1) return tok.slice(1, -1);
-  try {
-    return JSON.parse(tok) as string;
-  } catch {
-    return tok.slice(1, -1);
+const SIMPLE_ESCAPES: Record<string, string> = {
+  n: '\n',
+  r: '\r',
+  t: '\t',
+  b: '\b',
+  f: '\f',
+  v: '\v',
+  '0': '\0',
+  "'": "'",
+  '"': '"',
+  '\\': '\\',
+  '/': '/',
+};
+
+/** Decode a JSON5 string token (single or double quoted) by hand. */
+function decodeJson5(tok: string): string {
+  const body = tok.slice(1, -1);
+  let out = '';
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i] as string;
+    if (ch !== '\\') {
+      out += ch;
+      continue;
+    }
+    const e = body[++i] as string;
+    if (e === 'u') {
+      out += String.fromCharCode(parseInt(body.slice(i + 1, i + 5), 16));
+      i += 4;
+    } else if (e === 'x') {
+      out += String.fromCharCode(parseInt(body.slice(i + 1, i + 3), 16));
+      i += 2;
+    } else if (e === '\r' || e === '\n' || e === '\u2028' || e === '\u2029') {
+      if (e === '\r' && body[i + 1] === '\n') i++; // line continuation
+    } else out += SIMPLE_ESCAPES[e] ?? e;
   }
+  return out;
+}
+
+/** Decode a string / key token: JSON string, JSON5 single-quoted string, or an unquoted key. */
+export function decodeToken(tok: string): string {
+  const q = tok.charCodeAt(0);
+  if (q !== 0x22 && q !== 0x27) return tok; // unquoted (JSON5) key
+  if (q === 0x22 && tok.indexOf('\\') === -1) return tok.slice(1, -1);
+  if (q === 0x27 && tok.indexOf('\\') === -1) return tok.slice(1, -1);
+  if (q === 0x22) {
+    try {
+      return JSON.parse(tok) as string;
+    } catch {
+      /* JSON5-only escapes: fall through */
+    }
+  }
+  return decodeJson5(tok);
+}
+
+/** A number lexeme rewritten as a strict JSON number (hex, `+1`, `.5`, `5.`); null for Infinity / NaN. */
+export function strictNumber(lex: string): string {
+  let sign = '';
+  let body = lex;
+  if (body[0] === '+' || body[0] === '-') {
+    sign = body[0] === '-' ? '-' : '';
+    body = body.slice(1);
+  }
+  if (body === 'Infinity' || body === 'NaN') return 'null';
+  if (/^0[xX]/.test(body)) return sign + BigInt(body).toString();
+  if (body.startsWith('.')) body = '0' + body;
+  body = body.replace(/\.(?=$|[eE])/, '');
+  return sign + body;
+}
+
+/** Strict JSON text of a node's primitive value (or its raw slice when already strict). */
+export function strictRaw(m: JsonModel, id: number): string {
+  const t = m.type[id] as number;
+  const r = raw(m, id);
+  if (t === T_STRING)
+    return r.charCodeAt(0) === 0x22 && r.indexOf('\\') === -1 ? r : JSON.stringify(decodeToken(r));
+  if (t === T_NUMBER) return strictNumber(r);
+  return r;
+}
+
+export function strictKey(m: JsonModel, id: number): string | null {
+  const t = rawKey(m, id);
+  return t === null ? null : JSON.stringify(decodeToken(t));
 }
 
 export function rawKey(m: JsonModel, id: number): string | null {

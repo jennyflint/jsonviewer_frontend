@@ -1,7 +1,10 @@
 import { batch, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { getJSON, setJSON } from '../lib/storage';
-import { diffWorker, isStale } from '../lib/workers/clients';
+import { diffWorker, isCancelled, isStale } from '../lib/workers/clients';
+import { runJob } from './jobs';
+import { toast } from './toasts';
+import { t } from '../lib/i18n';
 import type { CompareResult } from '../lib/workers/diff.worker';
 import { DEFAULT_DIFF_OPTIONS } from '../lib/json/diff';
 import type { DiffOptions } from '../lib/json/diff';
@@ -65,8 +68,13 @@ export async function runCompare(opts: { explicit?: boolean } = {}): Promise<voi
   }
   setCompare({ status: 'running', error: null });
   try {
-    const res = await diffWorker.call((w) =>
-      w.compare(compare.left, compare.right, { ...compare.options }, compare.rawFallback),
+    const res = await runJob(
+      t('job.compare'),
+      () => diffWorker.cancel(),
+      () =>
+        diffWorker.call((w) =>
+          w.compare(compare.left, compare.right, { ...compare.options }, compare.rawFallback),
+        ),
     );
     batch(() => {
       setCompare({ result: res, status: 'done', activeChangeIndex: -1 });
@@ -75,7 +83,11 @@ export async function runCompare(opts: { explicit?: boolean } = {}): Promise<voi
     if (opts.explicit && res.errors.length === 0 && compare.left.trim())
       void autosaveToHistory(compare.left, 'compare');
   } catch (e) {
-    if (!isStale(e)) setCompare({ status: 'error', error: e instanceof Error ? e.message : String(e) });
+    if (isCancelled(e)) {
+      setCompare({ status: 'idle', error: null });
+      toast.info(t('job.cancelled'));
+    } else if (!isStale(e))
+      setCompare({ status: 'error', error: e instanceof Error ? e.message : String(e) });
   }
 }
 

@@ -1,4 +1,5 @@
 import * as Comlink from 'comlink';
+import { featureOn } from '../../stores/settings';
 import type { DiffWorkerApi } from './diff.worker';
 import type { JsonWorkerApi } from './json.worker';
 
@@ -6,6 +7,15 @@ export class StaleError extends Error {
   constructor() {
     super('Superseded by a newer request');
     this.name = 'StaleError';
+  }
+}
+
+/** The user cancelled the running job (the worker was terminated). */
+export class CancelledError extends StaleError {
+  constructor() {
+    super();
+    this.message = 'Cancelled';
+    this.name = 'CancelledError';
   }
 }
 
@@ -18,17 +28,20 @@ class WorkerClient<T> {
   private worker: Worker | null = null;
   private proxy: Comlink.Remote<T> | null = null;
   private seq = 0;
+  private onceSeq = 0;
   private pending = new Map<number, (e: Error) => void>();
 
   constructor(
     private factory: () => Worker,
     private respawn: boolean,
+    private init?: (api: Comlink.Remote<T>) => void,
   ) {}
 
   private ensure(): Comlink.Remote<T> {
     if (!this.proxy) {
       this.worker = this.factory();
       this.proxy = Comlink.wrap<T>(this.worker);
+      this.init?.(this.proxy); // messages are ordered: runs before the first real call
     }
     return this.proxy;
   }
@@ -51,15 +64,33 @@ class WorkerClient<T> {
     return result;
   }
 
-  /** Run a call without latest-wins semantics (e.g. one-off format actions). */
+  /** Run a call without latest-wins semantics (e.g. one-off format actions). Cancellable. */
   async once<P extends PromiseLike<unknown>>(fn: (api: Comlink.Remote<T>) => P): Promise<Awaited<P>> {
-    return (await fn(this.ensure())) as Awaited<P>;
+    const id = ++this.onceSeq;
+    const api = this.ensure();
+    return new Promise<Awaited<P>>((resolve, reject) => {
+      this.pending.set(-id, reject);
+      fn(api).then(
+        (v) => resolve(v as Awaited<P>),
+        (e) => reject(e),
+      );
+    }).finally(() => this.pending.delete(-id));
+  }
+
+  /** Terminate the worker: every running call rejects with CancelledError. A fresh worker starts on the next call. */
+  cancel(): void {
+    for (const reject of this.pending.values()) reject(new CancelledError());
+    this.pending.clear();
+    this.worker?.terminate();
+    this.worker = null;
+    this.proxy = null;
   }
 }
 
 export const jsonWorker = new WorkerClient<JsonWorkerApi>(
   () => new Worker(new URL('./json.worker.ts', import.meta.url), { type: 'module' }),
   false,
+  (api) => void api.configure({ lenient: featureOn('json5') }),
 );
 
 export const diffWorker = new WorkerClient<DiffWorkerApi>(
@@ -68,3 +99,4 @@ export const diffWorker = new WorkerClient<DiffWorkerApi>(
 );
 
 export const isStale = (e: unknown): e is StaleError => e instanceof StaleError;
+export const isCancelled = (e: unknown): e is CancelledError => e instanceof CancelledError;

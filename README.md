@@ -21,7 +21,7 @@ when you explicitly share it, save it to history, load it from a URL (the server
    `jsonviewer-net` network that this project joins. (Alternatively run `docker network create jsonviewer-net` once —
    but then start the backend with that network marked `external`, since Compose refuses to adopt a network it did not create.)
 2. `cp .env.example .env`
-3. `docker compose up -d --build`
+3. `docker compose -f docker-compose.yml up -d --build` (production image; plain `docker compose up -d` starts the dev server instead)
 4. Open http://localhost:3000.
 
 The container runs **non-root** (`nginxinc/nginx-unprivileged`, listening on 8080, published as `3000:8080`).
@@ -38,7 +38,7 @@ gzip is on, and the CSP / `X-Content-Type-Options` / `Referrer-Policy` / `Permis
 pnpm install
 pnpm dev            # Vite on http://localhost:5173, /api proxied to VITE_API_PROXY_TARGET
 # or, inside Docker (joins jsonviewer-net, proxies to http://api:8000):
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+docker compose up -d      # docker-compose.override.yml is picked up automatically: live code + hot reload on :3000
 ```
 
 The dev proxy uses `changeOrigin: false`, so cookies and the OAuth redirect stay on `localhost:5173`.
@@ -119,6 +119,26 @@ transferred (not cloned) from the worker. Formatting works from the model, so no
 `path.ts` are tested for **parity with the backend** (shared number/document/path fixtures); `duplicates.ts` returns the
 backend's exact response schema (typed from the generated API types) and was cross-checked against a live backend.
 
+## More features
+
+| Feature                                      | Where                    | Notes                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **JSON5 / JSONC**                            | Text tab                 | Comments, trailing commas, single quotes, unquoted keys, hex / `+1` / `.5` / `Infinity` numbers are accepted (strict JSON is tried first). The status bar shows a _JSON5 / JSONC_ badge; **Convert to JSON** (or Format / Minify / Sort, after a confirmation) rewrites it as strict JSON — comments are dropped.                                              |
+| **Redact**                                   | toolbar                  | Masks values by key name (`password`, `token`, `api_key` …, glob `*`) and/or by regular expression, with a live count; formatting and big numbers stay untouched. The share dialog can redact before sending.                                                                                                                                                  |
+| **Show only this branch**                    | Viewer, context menu     | Focuses the tree on one subtree; a banner offers "Show whole document".                                                                                                                                                                                                                                                                                        |
+| **Bookmarks**                                | Viewer, star on a node   | Stored per tab by JSON path (survive edits and reloads).                                                                                                                                                                                                                                                                                                       |
+| **Query**                                    | toolbar                  | JSONPath (`jsonpath-plus`) and JMESPath, run in the worker. Result: count, matched node paths (click to select), copy / download / open as a new document.                                                                                                                                                                                                     |
+| **Table view**                               | _Table_ tab              | Any array of objects: sort, filter (all columns or one), click a row to select the element, CSV copy / download. Virtualized.                                                                                                                                                                                                                                  |
+| **Several documents**                        | tab strip                | Up to 12 documents, each with its own draft (IndexedDB), versions and bookmarks; double-click to rename.                                                                                                                                                                                                                                                       |
+| **Versions**                                 | toolbar                  | Automatic local snapshots before Format / Minify / Sort / Paste / Load / Redact / Convert, plus manual ones; compare any with the current text (diff dialog) or restore. Max 15 versions per document.                                                                                                                                                         |
+| **Progress + cancel**                        | below the header         | Long parses, formats, queries, duplicate analyses and comparisons show a bar after 0.4 s with elapsed time and **Cancel** (the worker is terminated and restarted).                                                                                                                                                                                            |
+| **Share: password, one-time link, comments** | share dialog, `/s/:slug` | Password-protected links ask for it before anything is shown. One-time links show a confirmation first (link previews cannot burn them) and are destroyed by the first open. With _Allow comments_, visitors can comment (optionally on a node); the creator / owner can delete comments. A node link (`/s/slug?path=$.a.b[1]`) opens with that node selected. |
+
+**Feature switches.** Settings (gear icon in the header, or the Account page) has a _Features_ section with a switch for each optional
+feature: Duplicates, Query, Table view, Redact, Bookmarks, Show only this branch, Versions, Several documents (tabs), JSON5 / JSONC support,
+Progress bar and Cancel, and Share options. Everything is **on by default**; hover (or focus) a name for a short description.
+A switched-off feature disappears from the UI (and, for Versions and JSON5, stops working); the choice is stored in this browser.
+
 ## Keyboard shortcuts
 
 `Mod+Shift+F` format · `Mod+Shift+M` minify · `Mod+1`/`Mod+2` Text/Viewer · `Mod+F` search tree · `Mod+Shift+S` share ·
@@ -129,10 +149,9 @@ backend's exact response schema (typed from the generated API types) and was cro
 **Sent to the server only when you do it explicitly:** Share (document + optional title), Load JSON data / `?url=` links
 (the URL — the server fetches it; deep links always ask for confirmation first), "Save to history" and automatic history
 saving (signed-in users only; toggle _Save to history automatically_), and "Analyze on server" in the Duplicates panel.
-Formatting, searching, comparing and duplicate analysis happen locally in Web Workers.
+Formatting, searching, querying, redacting, comparing and duplicate analysis happen locally in Web Workers.
 
-**Stored in `localStorage`** (all access is try/catch-guarded, size-capped): UI settings, the editor draft (skipped above
-2 MB), the compare drafts (skipped above ~0.5 MB), the last 10 URLs, and — for anonymous shares — `{slug, title,
+**Stored in this browser** (all access is try/catch-guarded, size-capped): UI settings, tab list and bookmarks (`localStorage`); each document's draft (up to 15 MB) and its local versions (IndexedDB); the compare drafts (skipped above ~0.5 MB), the last 10 URLs, and — for anonymous shares — `{slug, title,
 created_at, expires_at, delete_token}` so you can delete your own links from this device (the share dialog says so).
 Nothing else sensitive is stored; auth is cookie-only.
 
@@ -169,4 +188,7 @@ backed by `+`/`−` gutters, labels and counts; `prefers-reduced-motion` and `pr
   compared by index by default (no LCS); `moved` is reported when matching array items by key (`arrayMatchKey`).
 - Tooltips are native `title` attributes (plus `aria-label`), not a custom tooltip component.
 - The history entry for a comparison is saved on an explicit **Compare** click (not on every auto-recompute).
+- Share passwords are sent over the same-origin API and stored by the server only as a salted scrypt hash; the browser keeps the password in memory for the opened page (it is needed for the comment requests) and never writes it to storage.
+- JSON5 / JSONC support covers the common extensions; exotic JSON5 (Unicode escapes in unquoted keys, `\0` followed by digits) is not validated strictly.
+- The query engines parse the document with `JSON.parse` inside the worker, so numbers beyond double precision are rounded in query _results_ (the document itself is never altered).
 - Vitest 3 / jsdom 25 are pinned because Vitest 5 / jsdom 31 need a newer Node than the spec's Node 20 image.

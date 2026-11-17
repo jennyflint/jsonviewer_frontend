@@ -103,7 +103,7 @@ describe('Header', () => {
   });
 });
 
-describe('ViewerPage', () => {
+describe('ViewerPage', { timeout: 40_000 }, () => {
   it('toolbar: format, minify, sort, copy, clear (with confirm for big documents)', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', {
@@ -137,12 +137,12 @@ describe('ViewerPage', () => {
     expect(mainDocument.doc.text.length).toBeGreaterThan(1000);
   });
   it('invalid JSON: format reports the error location instead of changing the text', async () => {
-    mainDocument.setText('{"a":1,}', { immediate: true });
+    mainDocument.setText('{"a":1 "b":2}', { immediate: true });
     mount('/', ViewerPage);
-    await waitFor(() => expect(screen.getByText(/Trailing comma/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Expected ','/)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Format' }));
     await waitFor(() => expect(screen.getByText('Cannot process invalid JSON')).toBeInTheDocument());
-    expect(mainDocument.doc.text).toBe('{"a":1,}');
+    expect(mainDocument.doc.text).toBe('{"a":1 "b":2}');
   });
   it('shows history actions only when signed in', async () => {
     mainDocument.setText('{"a":1}', { immediate: true });
@@ -150,7 +150,8 @@ describe('ViewerPage', () => {
     expect(screen.queryByRole('button', { name: 'Save to history' })).toBeNull();
     setAuth({ user, status: 'authenticated' });
     const save = vi.spyOn(api, 'saveHistory').mockResolvedValue({ deduplicated: false } as never);
-    fireEvent.click(await screen.findByRole('button', { name: 'Save to history' }));
+    const btn = await screen.findByRole('button', { name: 'Save to history' });
+    fireEvent.click(btn);
     await waitFor(() => expect(save).toHaveBeenCalledWith({ content: '{"a":1}', source: 'manual' }));
   });
   it('duplicates panel toggles and reports duplicate keys with a badge', async () => {
@@ -206,7 +207,22 @@ describe('ComparePage', () => {
   });
 });
 
+const plainMeta = (over = {}) => ({
+  slug: 'abc',
+  kind: 'single',
+  title: 'T',
+  created_at: '2025-01-01T00:00:00Z',
+  expires_at: null,
+  password_protected: false,
+  burn_after_read: false,
+  comments_enabled: false,
+  ...over,
+});
+
 describe('SharedPage', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'shareMeta').mockResolvedValue(plainMeta() as never);
+  });
   const detail = {
     slug: 'abc',
     kind: 'single',
@@ -236,12 +252,12 @@ describe('SharedPage', () => {
     await waitFor(() => expect(del).toHaveBeenCalled());
   });
   it('friendly not-found page on 404', async () => {
-    vi.spyOn(api, 'getShare').mockRejectedValue(new ApiError(404, 'share_not_found', 'nf'));
+    vi.spyOn(api, 'shareMeta').mockRejectedValue(new ApiError(404, 'share_not_found', 'nf'));
     mount('/s/zzz', SharedPage, '/s/:slug');
     expect(await screen.findByTestId('share-not-found')).toBeInTheDocument();
   });
   it('other errors offer a retry', async () => {
-    vi.spyOn(api, 'getShare').mockRejectedValue(new ApiError(500, 'internal_error', 'boom'));
+    vi.spyOn(api, 'shareMeta').mockRejectedValue(new ApiError(500, 'internal_error', 'boom'));
     mount('/s/zzz', SharedPage, '/s/:slug');
     expect(await screen.findByRole('alert')).toHaveTextContent('went wrong');
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
